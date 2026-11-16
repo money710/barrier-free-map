@@ -161,7 +161,8 @@
   /* 길찾기 패널: 제목 아래 왼쪽 위 (지도를 가리지 않게) */
   .route-panel {
     display: none;
-    position: fixed; z-index: 1100; left: 14px; top: calc(28px + var(--ui) * 46px + env(safe-area-inset-top, 0px));
+    position: fixed; z-index: 1100; left: 50%; transform: translateX(-50%);
+    bottom: calc(var(--dock-h, 0px) + var(--ui) * 10px);   /* 범례와 같은 자리: 메뉴바 위 가운데 */
     width: calc(var(--ui) * 270px); max-width: calc(100vw - 28px);
     background: #fff; border-radius: 12px; padding: calc(var(--ui) * 10px) calc(var(--ui) * 12px);
     box-shadow: 0 3px 12px rgba(0,0,0,.3); font-size: calc(var(--ui) * 13.5px); line-height: 1.45;
@@ -260,10 +261,12 @@ const map = L.map("map", {
 
 // ===== 처음 화면: 캠퍼스 보행로 전체가 제목과 메뉴바 사이 가운데에 꽉 차게 =====
 // (아래 코드에서 혹시 오류가 나도 처음 화면은 맞춰지도록 지도 만든 직후에 실행)
-function fitCampus() {
+function fitCampus(bottomPanel) {
   map.invalidateSize();
   const titleBottom = document.querySelector(".title").getBoundingClientRect().bottom;
-  const dockH = document.querySelector(".dock").getBoundingClientRect().height;
+  const dockH = bottomPanel
+    ? window.innerHeight - bottomPanel.getBoundingClientRect().top   // 아래 팝업까지 피해서 맞춤
+    : document.querySelector(".dock").getBoundingClientRect().height;
   map.fitBounds(L.geoJSON(NET_LINKS).getBounds(), {
     paddingTopLeft: [20, titleBottom + 10],
     paddingBottomRight: [20, dockH + 10],
@@ -272,7 +275,7 @@ function fitCampus() {
 }
 fitCampus();
 // 글꼴·화면 크기가 다 정해진 뒤 한 번 더 맞춤 (휴대폰 주소창 때문에 높이가 바뀌는 경우 대비)
-window.addEventListener("load", () => setTimeout(fitCampus, 100));
+window.addEventListener("load", () => setTimeout(() => fitCampus(), 100));
 console.info("[배리어프리맵] 2026-11-16 버전");   // 휴대폰에 새 파일이 반영됐는지 확인용
 
 // 배경지도: Esri 위성영상 (인증키 필요 없음)
@@ -547,12 +550,9 @@ function drawRoute(startEnt, endEnt) {
   });
 
   routeLayer = L.layerGroup([halo, line]).addTo(map);
-  const pr = document.getElementById("route-panel")?.getBoundingClientRect();
-  const wide = window.innerWidth > 900;
   map.fitBounds(halo.getBounds(), {
-    paddingTopLeft: [wide && pr ? pr.right + 30 : 30,
-      wide ? 40 : (pr ? pr.bottom + 20 : 40)],
-    paddingBottomRight: [40, dockHeight() + 30],
+    paddingTopLeft: [30, document.querySelector(".title").getBoundingClientRect().bottom + 20],
+    paddingBottomRight: [30, window.innerHeight - routePanel.getBoundingClientRect().top + 20],
   });
   return r;
 }
@@ -566,16 +566,15 @@ Object.entries(SLOPE_COLORS).forEach(([k, c]) => {
   it.innerHTML = `<i class="bar" style="background:${c}"></i>${k}`;
   slopeLegend.appendChild(it);
 });
-btnSlope.addEventListener("click", () => {
-  const on = btnSlope.getAttribute("aria-pressed") !== "true";
+function setSlope(on) {
   btnSlope.setAttribute("aria-pressed", on);
   slopeLegend.classList.toggle("on", on);
-  if (on) {
-    slopeLayer.addTo(map);
-    if (routeLayer) routeLayer.eachLayer((l) => l.bringToFront());   // 경로가 위에 오도록
-  } else {
-    map.removeLayer(slopeLayer);
-  }
+  if (on) slopeLayer.addTo(map); else map.removeLayer(slopeLayer);
+}
+btnSlope.addEventListener("click", () => {
+  const on = btnSlope.getAttribute("aria-pressed") !== "true";
+  if (on) offOthers("slope");
+  setSlope(on);
 });
 
 // ===== 길찾기 =====
@@ -703,6 +702,7 @@ function openRoute() {
   pickLayer.addTo(map);
   pinLayer.addTo(map);
   render();
+  fitCampus(routePanel);   // 출입구 동그라미가 팝업에 가리지 않게 캠퍼스를 팝업 위쪽에 맞춤
 }
 function closeRoute() {
   map.getContainer().classList.remove("route-mode");
@@ -730,8 +730,9 @@ new ResizeObserver(syncDock).observe(dockEl);
 syncDock();
 
 
-// ===== 아래 세 기능은 한 번에 하나만: 하나를 켜면 나머지는 자동으로 꺼짐 =====
+// ===== 메뉴바 네 기능은 한 번에 하나만: 하나를 켜면 나머지는 자동으로 꺼짐 =====
 function offOthers(keep) {
+  if (keep !== "slope" && btnSlope.getAttribute("aria-pressed") === "true") setSlope(false);
   if (keep !== "ent" && btnEnt.getAttribute("aria-pressed") === "true") setEnt(false);
   if (keep !== "wc" && wcOn) setWc(false);
   if (keep !== "route" && routePanel.classList.contains("open")) closeRoute();
