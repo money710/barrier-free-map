@@ -59,9 +59,20 @@
   /* 지도 오른쪽 아래 표기(출처)가 메뉴바에 가리지 않게 */
   .leaflet-bottom { bottom: var(--dock-h, 0px); }
 
-  /* 출입구 범례: 메뉴바 위, 화면 가운데 (버튼 켰을 때만) */
-  .legend {
+  /* 범례: 메뉴바 위, 화면 가운데 (버튼 켰을 때만). 둘 다 켜면 위아래로 쌓임 */
+  .legends {
     position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(100% + var(--ui) * 10px);
+    display: flex; flex-direction: column; align-items: center; gap: calc(var(--ui) * 6px);
+    width: max-content; max-width: calc(100vw - 28px); pointer-events: none;
+  }
+  .legends .legend { pointer-events: auto; }
+  /* 길 경사 등급 범례 항목 (누르는 버튼 아님) */
+  .legend .item {
+    display: flex; align-items: center; gap: 6px; white-space: nowrap;
+    padding: calc(var(--ui) * 4px) calc(var(--ui) * 6px); font: 600 calc(var(--ui) * 14px) Pretendard, "Malgun Gothic", sans-serif; color: var(--ink);
+  }
+  .legend .item .bar { width: calc(var(--ui) * 22px); height: calc(var(--ui) * 5px); border-radius: 3px; display: inline-block; }
+  .legend {
     display: none; flex-direction: row; flex-wrap: wrap; align-items: center; gap: calc(var(--ui) * 6px);
     width: max-content; max-width: calc(100vw - 28px); justify-content: center; padding: calc(var(--ui) * 6px) calc(var(--ui) * 8px);
     background: rgba(255,255,255,.97); border-radius: 12px; box-shadow: 0 3px 10px rgba(0,0,0,.3);
@@ -144,16 +155,8 @@
   @media (max-width: 560px) {
     :root { --ui: 0.95; --ctrl: 1.2; }   /* 휴대폰 배율 (크거나 작으면 이 숫자 조절) */
     .dock { gap: 6px; padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px)); }
-    .dock > button { max-width: none; font-size: 14px; padding: 9px 4px; }
+    .dock > button { max-width: none; font-size: 13px; padding: 8px 3px; }
   }
-  .slope-toggle { background: #fff; padding: calc(var(--ui) * 6px) calc(var(--ui) * 8px); font-size: calc(var(--ui) * 13px); border-radius: 10px !important; }
-  .slope-btn {
-    width: 100%; border: 0; border-radius: 8px; padding: calc(var(--ui) * 7px) calc(var(--ui) * 12px);
-    background: #1E3A8A; color: #fff; cursor: pointer; font: 700 calc(var(--ui) * 13px) Pretendard, "Malgun Gothic", sans-serif;
-  }
-  .slope-legend { margin-top: calc(var(--ui) * 6px); }
-  .slope-legend div { display: flex; align-items: center; gap: 6px; margin: 2px 0; }
-  .slope-legend span { width: calc(var(--ui) * 18px); height: calc(var(--ui) * 4px); border-radius: 2px; display: inline-block; }
 
   /* 길찾기 패널: 제목 아래 왼쪽 위 (지도를 가리지 않게) */
   .route-panel {
@@ -191,7 +194,6 @@
   /* 길찾기 중에는 건물을 눌러도 반응하지 않음 */
   .route-mode .bld-shape, .route-mode .bld-icon { pointer-events: none !important; }
   @media (max-width: 560px) {
-    .route-panel { top: calc(var(--ui) * 155px + env(safe-area-inset-top, 0px)); }   /* 휴대폰: 오른쪽 위 버튼과 겹치지 않게 아래로 */
   }
 </style>
 </head>
@@ -201,12 +203,18 @@
 
 
 <nav class="dock" aria-label="지도 기능">
-  <div class="legend" id="legend" role="group" aria-label="출입문 종류 선택">
-    <div class="legend-title">출입문 종류</div>
+  <div class="legends">
+    <div class="legend" id="slope-legend" role="group" aria-label="길 경사 등급 범례">
+      <div class="legend-title">길 경사 등급</div>
+    </div>
+    <div class="legend" id="legend" role="group" aria-label="출입문 종류 선택">
+      <div class="legend-title">출입문 종류</div>
+    </div>
   </div>
   <button id="btn-ent" aria-pressed="false">진입 가능<br>출입구</button>
   <button id="btn-route" aria-pressed="false">길찾기</button>
   <button id="btn-wc" aria-pressed="false">장애인 화장실<br>위치</button>
+  <button id="btn-slope" aria-pressed="false">길 경사<br>등급</button>
 </nav>
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
@@ -248,57 +256,29 @@ const CAMPUS = L.latLngBounds([37.4460, 126.6480], [37.4555, 126.6625]);
 const map = L.map("map", {
   maxBounds: CAMPUS.pad(1.0), maxBoundsViscosity: 1.0, minZoom: 15, maxZoom: 20, zoomControl: false,   /* 휴대폰처럼 좁은 화면에서도 캠퍼스 전체가 들어오게 */
   zoomSnap: 0.25,   /* 처음 화면을 캠퍼스에 딱 맞게 */
-}).setView([37.4505, 126.6555], 17);
-L.control.zoom({ position: "topright" }).addTo(map);
+});
 
-// =================== 브이월드 인증키 ===================
-// 브이월드(vworld.kr) > 오픈API > 인증키 발급에서 받은 키를 따옴표 안에 붙여넣으세요.
-// 예) const VWORLD_KEY = "1A2B3C4D-....";
-// 브이월드는 키 하나에 서비스 URL 하나만 등록되므로, 접속한 주소에 맞는 키를 골라 씀
-const VWORLD_KEYS = {
-  "localhost":          "",   // 내 컴퓨터 (VS Code Live Server)
-  "127.0.0.1":          "",
-  "money710.github.io": "",                                       // ← GitHub Pages용 키를 새로 발급받아 붙여넣기
-};
-const VWORLD_KEY = VWORLD_KEYS[location.hostname] || "";
-// ====================================================
-
-// 브이월드 WMTS 타일 (국토교통부 국내 항공영상)
-const vw = (layer, ext, opt = {}) => L.tileLayer(
-  `https://api.vworld.kr/req/wmts/1.0.0/${VWORLD_KEY}/${layer}/{z}/{y}/{x}.${ext}`,
-  { maxZoom: 20, maxNativeZoom: 19, minZoom: 6, attribution: "&copy; 브이월드(국토교통부)", ...opt });
-
-// Esri 위성사진: 키가 없거나 브이월드가 안 열릴 때만 쓰는 예비 지도
-const esriSat = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
-  maxZoom: 20, maxNativeZoom: 19, attribution: "Imagery &copy; Esri" });
-
-const baseLayers = {};   // 오른쪽 위 배경지도 목록 (적은 순서대로 표시)
-if (VWORLD_KEY.trim()) {
-  const vwSat = vw("Satellite", "jpeg").addTo(map);                       // 기본: 글자 없는 항공영상
-  const vwAerial = L.layerGroup([vw("Satellite", "jpeg"), vw("Hybrid", "png")]);   // 항공영상 + 건물명·도로명
-  baseLayers["항공영상, 글자 없음"] = vwSat;
-  baseLayers["항공영상"] = vwAerial;
-  baseLayers["일반지도"] = vw("Base", "png");
-
-  // 키가 틀렸거나 등록한 서비스 URL과 주소가 다르면 타일이 전부 실패함 → Esri로 자동 전환 (목록에는 안 보임)
-  let ok = 0, fail = 0, switched = false;
-  vwSat.on("tileload", () => ok++);
-  vwSat.on("tileerror", () => {
-    fail++;
-    if (!switched && ok === 0 && fail >= 4) {
-      switched = true;
-      map.removeLayer(vwSat);
-      esriSat.addTo(map);
-      toast("브이월드 항공영상을 불러오지 못해 예비 지도로 바꿨습니다. 인증키와 등록한 서비스 URL을 확인하세요.", 6000);
-      console.warn("[브이월드] 타일 요청 실패. 인증키, 서비스 URL(도메인) 등록, 키 활성화 상태를 확인하세요.");
-    }
+// ===== 처음 화면: 캠퍼스 보행로 전체가 제목과 메뉴바 사이 가운데에 꽉 차게 =====
+// (아래 코드에서 혹시 오류가 나도 처음 화면은 맞춰지도록 지도 만든 직후에 실행)
+function fitCampus() {
+  map.invalidateSize();
+  const titleBottom = document.querySelector(".title").getBoundingClientRect().bottom;
+  const dockH = document.querySelector(".dock").getBoundingClientRect().height;
+  map.fitBounds(L.geoJSON(NET_LINKS).getBounds(), {
+    paddingTopLeft: [20, titleBottom + 10],
+    paddingBottomRight: [20, dockH + 10],
+    animate: false,
   });
-} else {
-  esriSat.addTo(map);
-  setTimeout(() => toast("브이월드 인증키가 없어 예비 지도(Esri)를 표시 중입니다", 4000), 0);
-  console.info("[브이월드] index.html의 VWORLD_KEY에 인증키를 넣으면 항공영상으로 바뀝니다.");
 }
-if (Object.keys(baseLayers).length) L.control.layers(baseLayers, null, { position: "topright" }).addTo(map);
+fitCampus();
+// 글꼴·화면 크기가 다 정해진 뒤 한 번 더 맞춤 (휴대폰 주소창 때문에 높이가 바뀌는 경우 대비)
+window.addEventListener("load", () => setTimeout(fitCampus, 100));
+console.info("[배리어프리맵] 2026-11-16 버전");   // 휴대폰에 새 파일이 반영됐는지 확인용
+
+// 배경지도: Esri 위성영상 (인증키 필요 없음)
+L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
+  maxZoom: 20, maxNativeZoom: 19, attribution: "Imagery &copy; Esri",
+}).addTo(map);
 
 // 애니메이션을 처음부터 다시 재생
 function blink(el, cls = "blink") {
@@ -571,44 +551,32 @@ function drawRoute(startEnt, endEnt) {
   const wide = window.innerWidth > 900;
   map.fitBounds(halo.getBounds(), {
     paddingTopLeft: [wide && pr ? pr.right + 30 : 30,
-      wide ? (document.querySelector(".slope-toggle")?.getBoundingClientRect().bottom || 40) + 20 : (pr ? pr.bottom + 20 : 40)],
+      wide ? 40 : (pr ? pr.bottom + 20 : 40)],
     paddingBottomRight: [40, dockHeight() + 30],
   });
   return r;
 }
-// ===== 경사 등급 레이어 켜기/끄기 버튼 =====
-const SlopeToggle = L.Control.extend({
-  options: { position: 'topright' },
-  onAdd: function () {
-    const box = L.DomUtil.create('div', 'leaflet-bar slope-toggle');
-    box.innerHTML = `
-      <button type="button" class="slope-btn">길 경사 등급 켜기</button>
-      <div class="slope-legend" style="display:none">
-        ${Object.entries(SLOPE_COLORS)
-          .map(([k, c]) => `<div><span style="background:${c}"></span>${k}</div>`)
-          .join('')}
-      </div>`;
-    L.DomEvent.disableClickPropagation(box);
-
-    const btn = box.querySelector('.slope-btn');
-    const legend = box.querySelector('.slope-legend');
-
-    btn.addEventListener('click', () => {
-      if (map.hasLayer(slopeLayer)) {
-        map.removeLayer(slopeLayer);
-        btn.textContent = '길 경사 등급 켜기';
-        legend.style.display = 'none';
-      } else {
-        slopeLayer.addTo(map);
-        btn.textContent = '길 경사 등급 끄기';
-        legend.style.display = 'block';
-        if (routeLayer) routeLayer.eachLayer(l => l.bringToFront());  // 경로가 위에 오도록
-      }
-    });
-    return box;
+// ===== 길 경사 등급 켜기/끄기 (메뉴바 버튼) =====
+// 다른 기능과 함께 켜 둘 수 있음 (길찾기 중에도 경사 확인용)
+const btnSlope = document.getElementById("btn-slope");
+const slopeLegend = document.getElementById("slope-legend");
+Object.entries(SLOPE_COLORS).forEach(([k, c]) => {
+  const it = document.createElement("span");
+  it.className = "item";
+  it.innerHTML = `<i class="bar" style="background:${c}"></i>${k}`;
+  slopeLegend.appendChild(it);
+});
+btnSlope.addEventListener("click", () => {
+  const on = btnSlope.getAttribute("aria-pressed") !== "true";
+  btnSlope.setAttribute("aria-pressed", on);
+  slopeLegend.classList.toggle("on", on);
+  if (on) {
+    slopeLayer.addTo(map);
+    if (routeLayer) routeLayer.eachLayer((l) => l.bringToFront());   // 경로가 위에 오도록
+  } else {
+    map.removeLayer(slopeLayer);
   }
 });
-map.addControl(new SlopeToggle());
 
 // ===== 길찾기 =====
 // ===== 출입구 표시 이름 (data.js = 엑셀 변환 결과에서 자동 생성) =====
@@ -761,15 +729,6 @@ function syncDock() { document.documentElement.style.setProperty("--dock-h", doc
 new ResizeObserver(syncDock).observe(dockEl);
 syncDock();
 
-// ===== 처음 화면: 캠퍼스 보행로 전체가 꽉 차게 확대 =====
-function fitCampus() {
-  const titleBottom = document.querySelector(".title").getBoundingClientRect().bottom;
-  map.fitBounds(L.geoJSON(NET_LINKS).getBounds(), {
-    paddingTopLeft: [20, titleBottom + 10],
-    paddingBottomRight: [20, dockHeight() + 10],
-  });
-}
-fitCampus();
 
 // ===== 아래 세 기능은 한 번에 하나만: 하나를 켜면 나머지는 자동으로 꺼짐 =====
 function offOthers(keep) {
