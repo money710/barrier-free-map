@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>인하대 배리어프리맵</title>
+<!-- 지도 라이브러리(Leaflet)와 글꼴(Pretendard) -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<!-- convert.py가 만든 데이터 파일 (엑셀을 고치면 이 파일만 교체) -->
+<script>
+  // 브라우저가 예전 data.js를 기억하지 않도록 매번 새로 읽음
+  document.write('<script src="data.js?v=' + Date.now() + '"><\/script>');
+</script>
+<script src="network.js"></script>
+<style>
+  :root {
+    --inha: #1C4A86;      /* 인하 블루 */
+    --ink: #1E2530;
+    --muted: #6B7685;
+    --line: #E3E7EC;
+    --flash: #FFD400;     /* 경계 표시 */
+    --ok: #1F8A5B;        /* 경로 색상 - 휠체어 진입 가능 */
+    --limited: #C98A00;   /* 경로 색상 - 제한적 */
+    --warn: #C8372D;      /* 경로 색상 - 주의사항 */
+    --ui: 2.0;   /* 버튼·팝업 전체 크기 배율 */
+    /* 오른쪽 위 확대·축소, 배경지도 버튼 크기 배율 */
+    --ctrl: 2.0;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; font-family: Pretendard, "Malgun Gothic", sans-serif; color: var(--ink); }
+  #map { position: fixed; inset: 0; background: #2b2f33; }
+
+  /* 좌상단 제목
+  .title {
+    position: fixed; z-index: 1000; left: 14px; top: calc(14px + env(safe-area-inset-top, 0px));
+    background: var(--inha); color: #fff; padding: calc(var(--ui) * 9px) calc(var(--ui) * 14px); border-radius: 10px;
+    font-weight: 700; font-size: calc(var(--ui) * 17px); letter-spacing: -0.02em; box-shadow: 0 2px 8px rgba(0,0,0,.3);
+  } */
+
+  /* 하단 메뉴바: 버튼 3개 */
+  .dock {
+    position: fixed; z-index: 1000; left: 0; right: 0; bottom: 0;
+    display: flex; justify-content: center; gap: calc(var(--ui) * 10px);
+    padding: calc(var(--ui) * 8px) calc(var(--ui) * 12px) calc(var(--ui) * 8px + env(safe-area-inset-bottom, 0px));
+    background: rgba(255,255,255,.97); box-shadow: 0 -3px 14px rgba(0,0,0,.28);
+    border-top: 3px solid var(--inha);
+  }
+  .dock > button {
+    flex: 1 1 0; min-width: 0; max-width: calc(var(--ui) * 190px);
+    padding: calc(var(--ui) * 9px) calc(var(--ui) * 10px); border-radius: 12px;
+    border: 2px solid var(--inha); background: #fff; color: var(--inha);
+    font: 700 calc(var(--ui) * 15px)/1.25 Pretendard, "Malgun Gothic", sans-serif; cursor: pointer; word-break: keep-all;
+  }
+  .dock > button[aria-pressed="true"] { background: var(--inha); color: #fff; }
+  .dock > button:focus-visible { outline: 3px solid var(--flash); outline-offset: 2px; }
+  /* 지도 오른쪽 아래 표기(출처)가 메뉴바에 가리지 않게 */
+  .leaflet-bottom { bottom: var(--dock-h, 0px); }
+
+  /* 출입구 범례: 메뉴바 위, 화면 가운데 */
+  .legend {
+    position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(100% + var(--ui) * 10px);
+    display: none; flex-direction: row; flex-wrap: wrap; align-items: center; gap: calc(var(--ui) * 6px);
+    width: max-content; max-width: calc(100vw - 28px); justify-content: center; padding: calc(var(--ui) * 6px) calc(var(--ui) * 8px);
+    background: rgba(255,255,255,.97); border-radius: 12px; box-shadow: 0 3px 10px rgba(0,0,0,.3);
+  }
+  .legend.on { display: flex; }
+  .legend .legend-title { font: 700 calc(var(--ui) * 13px) Pretendard, "Malgun Gothic", sans-serif; color: var(--muted); padding: 0 calc(var(--ui) * 4px); white-space: nowrap; }
+  /* 문 종류 선택 버튼 (누르면 켜고 끔) */
+  .legend .chip {
+    display: flex; align-items: center; gap: 8px; white-space: nowrap; cursor: pointer; text-align: left;
+    border: 1.5px solid var(--line); background: #fff; color: var(--ink); border-radius: 8px;
+    padding: calc(var(--ui) * 5px) calc(var(--ui) * 10px); font: 600 calc(var(--ui) * 14px) Pretendard, "Malgun Gothic", sans-serif;
+  }
+  .legend .chip > span { color: var(--ink); }
+  .legend .chip[aria-pressed="true"] { border-color: currentColor; }
+  .legend .chip[aria-pressed="false"] { color: var(--muted); background: #F3F4F6; }
+  .legend .chip[aria-pressed="false"] .dot { background: #C4C9D0 !important; }
+  .legend .chip[aria-pressed="false"] > span { color: var(--muted); text-decoration: line-through; }
+  .legend .chip:focus-visible { outline: 3px solid var(--flash); outline-offset: 2px; }
+  .legend .chip small { font-weight: 500; color: var(--muted); }
+  .dot { width: calc(var(--ui) * 12px); height: calc(var(--ui) * 12px); border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.3); }
+
+  /* 안내 메시지 */
+  .toast {
+    max-width: calc(100% - 32px); text-align: center; line-height: 1.45;
+    position: fixed; z-index: 1001; left: 50%; top: calc(16px + env(safe-area-inset-top, 0px));
+    transform: translate(-50%, -12px); opacity: 0; pointer-events: none;
+    background: var(--ink); color: #fff; padding: calc(var(--ui) * 10px) calc(var(--ui) * 16px); border-radius: 10px; font-size: calc(var(--ui) * 15px);
+    transition: opacity .2s, transform .2s;
+  }
+  .toast.on { opacity: 1; transform: translate(-50%, 0); }
+
+  /* 건물 외곽선: 평소엔 보이지 않고, 클릭·화장실 버튼으로 lit 될 때만 표시 */
+  .bld-shape { cursor: pointer; }
+  .bld-shape.lit { stroke: var(--flash); stroke-opacity: 1; stroke-width: 4px; fill: var(--flash); fill-opacity: .12; }
+  .bld-tag {
+    background: rgba(28,74,134,.92); color: #fff; border-radius: 6px; padding: 3px 8px;
+    font: 600 calc(var(--ui) * 13px) Pretendard, sans-serif; white-space: nowrap; cursor: pointer;
+    box-shadow: 0 1px 3px rgba(0,0,0,.35); transform: translate(-50%, -50%); display: inline-block;
+    border: 2px solid transparent;
+  }
+  .bld-tag.lit { border-color: var(--flash); background: var(--ink); }
+
+  /* 건물 선택 시 반짝임 애니메이션 */
+  @keyframes flash-shape { 0%,100% { stroke-opacity: 1; } 50% { stroke-opacity: .45; } }
+  @keyframes flash-tag   { 0%,100% { box-shadow: 0 0 0 0 var(--flash); } 50% { box-shadow: 0 0 0 3px var(--flash); } }
+  @keyframes flash-dot   { 0%,100% { opacity: 1; } 50% { opacity: .5; } }   /* 흐려지는 정도: .5 (1에 가까울수록 약하게) */
+  .bld-shape.blink { animation: flash-shape 1.2s ease-in-out 2; }   /* 속도(1.2s) · 횟수(2) */
+  .bld-tag.blink   { animation: flash-tag 1.2s ease-in-out 2; }
+  .ent-dot.blink   { animation: none; }   /* 출입구 점 반짝임 끔 (켜려면: flash-dot 1.2s ease-in-out 1) */
+  @media (prefers-reduced-motion: reduce) {
+    .bld-shape.blink, .bld-tag.blink, .ent-dot.blink { animation: none; }
+  }
+
+  /* 팝업 */
+  .leaflet-popup-content-wrapper { border-radius: 12px; padding: 0; overflow: hidden; }
+  .leaflet-popup-content { margin: 0; width: min(calc(var(--ui) * 330px), 88vw) !important; font-family: Pretendard, "Malgun Gothic", sans-serif; }
+  .pop-head { background: var(--inha); color: #fff; padding: calc(var(--ui) * 11px) calc(var(--ui) * 40px) calc(var(--ui) * 11px) calc(var(--ui) * 16px); font-size: calc(var(--ui) * 17px); font-weight: 700; }
+  .pop-head small { display: block; font-weight: 500; font-size: calc(var(--ui) * 13px); opacity: .85; margin-top: 2px; }
+  /* 화장실 목록이 길면 팝업 안에서 스크롤 */
+  .pop-body { padding: calc(var(--ui) * 11px) calc(var(--ui) * 16px) calc(var(--ui) * 13px); font-size: calc(var(--ui) * 14.5px); line-height: 1.55; max-height: 55vh; overflow-y: auto; }
+  .pop-body dl { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: calc(var(--ui) * 6px) calc(var(--ui) * 12px); word-break: keep-all; }
+  .pop-body dt { color: var(--muted); white-space: nowrap; }
+  .pop-body dd { margin: 0; }
+  .pop-body ul { margin: 0; padding-left: 16px; }
+  .caution { margin: 10px 0 0; color: var(--warn); font-weight: 600; }
+  .badge { display: inline-block; padding: 1px 9px; border-radius: 999px; font-size: calc(var(--ui) * 13px); font-weight: 600; color: #fff; }
+  .leaflet-container a.leaflet-popup-close-button { color: #fff; width: calc(var(--ui) * 30px); height: calc(var(--ui) * 30px); font: calc(var(--ui) * 22px)/calc(var(--ui) * 30px) Tahoma, sans-serif; top: calc(var(--ui) * 6px); right: calc(var(--ui) * 6px); }
+  /* 확대·축소, 배경지도 버튼도 같이 키움 */
+  .leaflet-touch .leaflet-bar a, .leaflet-bar a { width: calc(var(--ctrl) * 30px); height: calc(var(--ctrl) * 30px); line-height: calc(var(--ctrl) * 30px); font-size: calc(var(--ctrl) * 20px); }
+  .leaflet-touch .leaflet-control-layers-toggle, .leaflet-control-layers-toggle { width: calc(var(--ctrl) * 34px) !important; height: calc(var(--ctrl) * 34px) !important; background-size: calc(var(--ctrl) * 20px); }
+  .leaflet-control-layers-expanded { font-size: calc(var(--ctrl) * 13px); padding: 10px 16px; line-height: 1.9; }
+  .leaflet-control-layers-selector { width: calc(var(--ctrl) * 11px); height: calc(var(--ctrl) * 11px); margin-right: 6px; vertical-align: -2px; }
+
+  /* 오류 메시지 */
+  .err { position: fixed; z-index: 1002; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,.55); }
+  .err div { background: #fff; max-width: 420px; padding: 20px 22px; border-radius: 10px; line-height: 1.6; }
+  .err h2 { margin: 0 0 8px; font-size: 17px; color: var(--warn); }
+
+  @media (max-width: 560px) {
+    :root { --ui: 1.2; --ctrl: 1.4; }   /* 휴대폰 배율 */
+    .dock { gap: 8px; padding: 8px 10px calc(8px + env(safe-area-inset-bottom, 0px)); }
+    .dock > button { max-width: none; font-size: 16px; padding: 11px 6px; }
+  }
+  .slope-toggle { background: #fff; padding: calc(var(--ui) * 6px) calc(var(--ui) * 8px); font-size: calc(var(--ui) * 13px); border-radius: 10px !important; }
+  .slope-btn {
+    width: 100%; border: 0; border-radius: 8px; padding: calc(var(--ui) * 7px) calc(var(--ui) * 12px);
+    background: #1E3A8A; color: #fff; cursor: pointer; font: 700 calc(var(--ui) * 13px) Pretendard, "Malgun Gothic", sans-serif;
+  }
+  .slope-legend { margin-top: calc(var(--ui) * 6px); }
+  .slope-legend div { display: flex; align-items: center; gap: 6px; margin: 2px 0; }
+  .slope-legend span { width: calc(var(--ui) * 18px); height: calc(var(--ui) * 4px); border-radius: 2px; display: inline-block; }
+
+  /* 길찾기 패널 (위치 수정 필요) */
+  .route-panel {
+    display: none;
+    position: fixed; z-index: 1100; left: 14px; top: calc(28px + var(--ui) * 46px + env(safe-area-inset-top, 0px));
+    width: calc(var(--ui) * 270px); max-width: calc(100vw - 28px);
+    background: #fff; border-radius: 12px; padding: calc(var(--ui) * 10px) calc(var(--ui) * 12px);
+    box-shadow: 0 3px 12px rgba(0,0,0,.3); font-size: calc(var(--ui) * 13.5px); line-height: 1.45;
+  }
+  .route-panel.open { display: block; }
+  .rp-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: calc(var(--ui) * 8px); }
+  .rp-title { font-weight: 700; color: var(--inha); font-size: calc(var(--ui) * 15px); }
+  .rp-close { border: 0; background: none; font-size: calc(var(--ui) * 20px); cursor: pointer; line-height: 1; color: var(--muted); }
+  .rp-sel { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: calc(var(--ui) * 6px) calc(var(--ui) * 8px); align-items: center; }
+  .rp-sel dd { margin: 0; font-weight: 600; word-break: keep-all; }
+  .rp-sel dd.empty { color: var(--muted); font-weight: 500; }
+  #rp-result { margin-top: calc(var(--ui) * 8px); padding-top: calc(var(--ui) * 8px); border-top: 1px solid var(--line); }
+  .rp-warn { color: #D7301F; font-weight: 600; }
+  .rp-actions { display: flex; gap: 6px; margin-top: calc(var(--ui) * 8px); }
+  .rp-actions button {
+    flex: 1; border: 1.5px solid var(--inha); background: #fff; color: var(--inha); border-radius: 8px;
+    padding: calc(var(--ui) * 5px); font: 600 calc(var(--ui) * 12.5px) Pretendard, "Malgun Gothic", sans-serif; cursor: pointer;
+  }
+  .rp-actions button:disabled { opacity: .4; cursor: default; }
+  .rp-actions button:focus-visible, .rp-close:focus-visible { outline: 3px solid var(--flash); outline-offset: 2px; }
+  /* 출발·도착 표시 */
+  .pin {
+    display: inline-block; padding: 2px calc(var(--ui) * 8px); border-radius: 999px; color: #fff; white-space: nowrap;
+    font: 700 calc(var(--ui) * 12px)/1.5 Pretendard, "Malgun Gothic", sans-serif; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.4);
+  }
+  .pin-start { background: var(--inha); }
+  .pin-end { background: var(--ink); }
+  .map-pin { transform: translate(-50%, calc(-100% - 6px)); display: inline-block; }
+  .pick-dot { cursor: pointer; }
+  /* 길찾기 중에는 건물을 눌러도 반응하지 않음 */
+  .route-mode .bld-shape, .route-mode .bld-icon { pointer-events: none !important; }
+  @media (max-width: 560px) {
+    .route-panel { top: calc(var(--ui) * 155px + env(safe-area-inset-top, 0px)); }   /* 휴대폰: 오른쪽 위 버튼과 겹치지 않게 아래로 */
+  }
+</style>
+</head>
+<body>
+<div id="map" role="application" aria-label="인하대학교 용현캠퍼스 지도"></div>
+<div class="title">인하대 배리어프리맵</div>
+
+
+<nav class="dock" aria-label="지도 기능">
+  <div class="legend" id="legend" role="group" aria-label="출입문 종류 선택">
+    <div class="legend-title">출입문 종류</div>
+  </div>
+  <button id="btn-ent" aria-pressed="false">진입 가능<br>출입구</button>
+  <button id="btn-route" aria-pressed="false">길찾기</button>
+  <button id="btn-wc" aria-pressed="false">장애인 화장실<br>위치</button>
+</nav>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+// data.js를 못 불러왔을 때 안내
+if (typeof BF_DATA === "undefined") {
+  document.body.insertAdjacentHTML("beforeend",
+    '<div class="err"><div><h2>데이터 파일을 찾지 못했습니다</h2>' +
+    'index.html과 같은 폴더에 data.js가 있는지 확인하세요. ' +
+    '다운로드하면서 data (1).js처럼 이름이 바뀌었을 수 있습니다.</div></div>');
+  throw new Error("data.js 없음");
+}
+
+// ---------- 1. 코드값 → 한글 ----------
+const HAS = { yes: "있음", no: "없음", unknown: "미조사", "n/a": "해당없음" };
+const DOOR = { automatic: "자동문", hinged: "여닫이", sliding: "미닫이", revolving: "회전문", no: "문 없음", unknown: "미조사" };
+const WC_TYPE = { unisex: "남녀공용", male: "남", female: "여", unknown: "" };
+const WC_STATE = { in_service: "", broken: "고장", locked: "잠김", unknown: "" };
+const ENT = { yes: ["휠체어 진입 가능", "#1F8A5B"], limited: ["제한적", "#C98A00"] };
+const DOOR_COLORS = {
+  automatic: "#29B6F6",  // 자동문: 하늘색
+  hinged:    "#EC4899",  // 여닫이: 핑크
+  sliding:   "#8B5CF6",  // 미닫이: 보라
+  revolving: "#14B8A6",  // 회전문: 청록
+  no:        "#475569",  // 문 없음: 진회색
+  unknown:   "#9CA3AF",  // 미조사: 연회색
+};
+
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const blank = (v) => v === null || v === undefined || v === "" || v === "미조사";
+const floorName = (f) => f == null ? "" : (f < 0 ? `지하 ${-f}층` : `${f}층`);
+
+// ---------- 2. 지도 (인하대 고정) ----------
+const CAMPUS = L.latLngBounds([37.4460, 126.6480], [37.4555, 126.6625]);
+const map = L.map("map", {
+  maxBounds: CAMPUS.pad(0.15), maxBoundsViscosity: 1.0, minZoom: 16, maxZoom: 20, zoomControl: false,
+  zoomSnap: 0.25,   /* 처음 화면을 캠퍼스에 딱 맞게 */
+}).setView([37.4505, 126.6555], 17);
+L.control.zoom({ position: "topright" }).addTo(map);
+
+// =================== 브이월드 인증키 ===================
+const VWORLD_KEYS = {
+  "localhost":          "",   // 내 컴퓨터 (VS Code Live Server)
+  "127.0.0.1":          "",
+  "money710.github.io": "",                                       // ← GitHub Pages용 키를 새로 발급받아 붙여넣기
+};
+const VWORLD_KEY = VWORLD_KEYS[location.hostname] || "";
+// ====================================================
+
+// 브이월드 WMTS 타일 (국토교통부 국내 항공영상)
+const vw = (layer, ext, opt = {}) => L.tileLayer(
+  `https://api.vworld.kr/req/wmts/1.0.0/${VWORLD_KEY}/${layer}/{z}/{y}/{x}.${ext}`,
+  { maxZoom: 20, maxNativeZoom: 19, minZoom: 6, attribution: "&copy; 브이월드(국토교통부)", ...opt });
+
+// Esri 위성사진: 키가 없거나 브이월드가 안 열릴 때만 쓰는 예비 지도
+const esriSat = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
+  maxZoom: 20, maxNativeZoom: 19, attribution: "Imagery &copy; Esri" });
+
+const baseLayers = {};   // 오른쪽 위 배경지도 목록 (적은 순서대로 표시)
+if (VWORLD_KEY.trim()) {
+  const vwSat = vw("Satellite", "jpeg").addTo(map);                       // 기본: 글자 없는 항공영상
+  const vwAerial = L.layerGroup([vw("Satellite", "jpeg"), vw("Hybrid", "png")]);   // 항공영상 + 건물명·도로명
+  baseLayers["항공영상, 글자 없음"] = vwSat;
+  baseLayers["항공영상"] = vwAerial;
+  baseLayers["일반지도"] = vw("Base", "png");
+
+  // 키가 틀렸거나 등록한 서비스 URL과 주소가 다르면 타일이 전부 실패함 → Esri로 자동 전환 (목록에는 안 보임)
+  let ok = 0, fail = 0, switched = false;
+  vwSat.on("tileload", () => ok++);
+  vwSat.on("tileerror", () => {
+    fail++;
+    if (!switched && ok === 0 && fail >= 4) {
+      switched = true;
+      map.removeLayer(vwSat);
+      esriSat.addTo(map);
+      toast("브이월드 항공영상을 불러오지 못해 예비 지도로 바꿨습니다. 인증키와 등록한 서비스 URL을 확인하세요.", 6000);
+      console.warn("[브이월드] 타일 요청 실패. 인증키, 서비스 URL(도메인) 등록, 키 활성화 상태를 확인하세요.");
+    }
+  });
+} else {
+  esriSat.addTo(map);
+  setTimeout(() => toast("브이월드 인증키가 없어 예비 지도(Esri)를 표시 중입니다", 4000), 0);
+  console.info("[브이월드] index.html의 VWORLD_KEY에 인증키를 넣으면 항공영상으로 바뀝니다.");
+}
+if (Object.keys(baseLayers).length) L.control.layers(baseLayers, null, { position: "topright" }).addTo(map);
+
+// 애니메이션을 처음부터 다시 재생
+function blink(el, cls = "blink") {
+  if (!el) return;
+  el.classList.remove(cls); void el.getBoundingClientRect(); el.classList.add(cls);
+}
+const toastEl = document.getElementById("toast");
+let toastTimer;
+function toast(msg, ms = 2200) {
+  toastEl.textContent = msg; toastEl.classList.add("on");
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => toastEl.classList.remove("on"), ms);
+}
+
+// ---------- 3. 건물 (클릭 → 경계 반짝 + 팝업) ----------
+const B = {};          // building_id → { p, layer, els(), center }
+let selected = null;   // 클릭으로 선택된 건물
+let wcOn = false;      // 화장실 버튼 상태
+
+function buildingPopup(p) {
+  const wcs = p.restrooms || [];
+  const wcHtml = wcs.length
+    ? `<ul>${wcs.map((w) => {
+        const extra = [WC_TYPE[w.type], WC_STATE[w.available]].filter(Boolean).join(", ");
+        return `<li>${floorName(w.floor)} ${blank(w.location) ? "(위치 미조사)" : esc(w.location)}${extra ? ` <small>(${esc(extra)})</small>` : ""}</li>`;
+      }).join("")}</ul>`
+    : "없음";
+  let elev = HAS[p.elevator] ?? "미조사";
+  if (p.elevator === "yes") elev += blank(p.elevator_floors) ? " (운행층 미조사)" : ` (${esc(p.elevator_floors)})`;
+  return `
+    <div class="pop-head">${esc(p.name)}</div>
+    <div class="pop-body">
+      <dl>
+        <dt>장애인 화장실</dt><dd>${wcHtml}</dd>
+        <dt>엘리베이터</dt><dd>${elev}</dd>
+        <dt>출입구 경사로</dt><dd>${HAS[p.entrance_ramp] ?? "미조사"}</dd>
+      </dl>
+      ${p.caution ? `<p class="caution">* ${esc(p.caution)}</p>` : ""}
+    </div>`;
+}
+
+function setLit(id, on) {
+  B[id].els().forEach((el) => el.classList.toggle("lit", on));
+}
+function refreshLit() {
+  for (const id in B) setLit(id, id === selected || (wcOn && B[id].p.restroom_count > 0));
+}
+
+BF_DATA.buildings.features.forEach((f) => {
+  const p = f.properties;
+  const center = p.center ? [p.center[1], p.center[0]] : null;
+  let layer, els;
+  if (f.geometry.type === "Point") {
+    const [lng, lat] = f.geometry.coordinates;
+    layer = L.marker([lat, lng], {
+      icon: L.divIcon({ className: "bld-icon", html: `<span class="bld-tag">${esc(p.name)}</span>`, iconSize: null }),
+      keyboard: true, title: p.name,
+    });
+    els = () => { const e = layer.getElement(); return e ? [e.querySelector(".bld-tag")] : []; };
+  } else {
+    layer = L.geoJSON(f, { style: { color: "#FFD400", weight: 4, opacity: 0, fillColor: "#FFD400", fillOpacity: 0, className: "bld-shape" }  /* 평소엔 투명(클릭만 됨) */ });
+    els = () => { const a = []; layer.eachLayer((l) => l.getElement() && a.push(l.getElement())); return a; };
+  }
+  layer.addTo(map).bindPopup(buildingPopup(p), { autoPanPaddingTopLeft: [20, 180], autoPanPaddingBottomRight: [70, 260] });
+  layer.on("click", () => {
+    selected = p.building_id; refreshLit();
+    els().forEach((el) => blink(el));
+  });
+  layer.on("popupclose", () => { if (selected === p.building_id) { selected = null; refreshLit(); } });
+  B[p.building_id] = { p, layer, els };
+});
+
+// ---------- 4. 버튼: 진입 가능 출입구 (문 종류별 색) ----------
+const doorKey = (p) => (p.door_type in DOOR_COLORS ? p.door_type : "unknown");
+const okEntrances = {
+  type: "FeatureCollection",
+  features: BF_DATA.entrances.features.filter((f) => f.properties.wheelchair === "yes"),
+};
+const entLayer = L.geoJSON(okEntrances, {
+  pointToLayer: (f, latlng) => L.circleMarker(latlng, {
+    radius: 10, color: "#fff", weight: 3, fillOpacity: 1, className: "ent-dot",
+    fillColor: DOOR_COLORS[doorKey(f.properties)],
+  }),
+  onEachFeature: (f, layer) => {
+    const p = f.properties;
+    const [label, color] = ENT[p.wheelchair] || ["미조사", "#8D96A3"];
+    const bname = B[p.entrance_id.split("-")[0]]?.p.name || B[p.building_id]?.p.name || "";
+    layer.bindTooltip(esc(p.name || p.entrance_id));
+    layer.bindPopup(`
+      <div class="pop-head">${esc(p.name || p.entrance_id)}<small>${esc(bname)} ${floorName(p.floor)} 연결</small></div>
+      <div class="pop-body"><dl>
+        <dt>휠체어</dt><dd><span class="badge" style="background:${color}">${label}</span></dd>
+        <dt>출입문</dt><dd><span class="badge" style="background:${DOOR_COLORS[doorKey(p)]}">${DOOR[p.door_type] ?? "미조사"}</span></dd>
+        <dt>경사로</dt><dd>${HAS[p.ramp] ?? "미조사"}</dd>
+      </dl>${p.note ? `<p style="margin:8px 0 0">${esc(p.note)}</p>` : ""}</div>`,
+      { autoPanPaddingTopLeft: [20, 180], autoPanPaddingBottomRight: [70, 260] });
+  },
+});
+
+// 문 종류별로 묶기 (실제로 있는 종류만 범례에 표시)
+const entGroups = {};
+entLayer.eachLayer((l) => {
+  const k = doorKey(l.feature.properties);
+  (entGroups[k] ||= L.featureGroup()).addLayer(l);
+});
+
+const btnEnt = document.getElementById("btn-ent");
+const legend = document.getElementById("legend");
+Object.keys(DOOR_COLORS).filter((k) => entGroups[k]).forEach((k) => {
+  const c = document.createElement("button");
+  c.type = "button"; c.className = "chip"; c.dataset.kind = k;
+  c.setAttribute("aria-pressed", "true");
+  c.style.color = DOOR_COLORS[k];
+  c.innerHTML = `<i class="dot" style="background:${DOOR_COLORS[k]}"></i><span>${DOOR[k]}</span><small>${entGroups[k].getLayers().length}</small>`;
+  c.onclick = () => {
+    c.setAttribute("aria-pressed", c.getAttribute("aria-pressed") !== "true");
+    drawEntrances();
+  };
+  legend.appendChild(c);
+});
+const chips = legend.querySelectorAll(".chip");
+L.DomEvent.disableClickPropagation(legend);
+
+function drawEntrances() {
+  const on = btnEnt.getAttribute("aria-pressed") === "true";
+  chips.forEach((c) => {
+    const g = entGroups[c.dataset.kind];
+    if (on && c.getAttribute("aria-pressed") === "true") {
+      const wasOn = map.hasLayer(g);
+      g.addTo(map);
+      if (!wasOn) g.eachLayer((l) => blink(l.getElement()));   // 새로 켜진 종류만 한 번 반짝
+    } else {
+      map.removeLayer(g);
+    }
+  });
+}
+function setEnt(on) {
+  btnEnt.setAttribute("aria-pressed", on);
+  legend.classList.toggle("on", on);
+  drawEntrances();
+}
+btnEnt.onclick = () => {
+  const on = btnEnt.getAttribute("aria-pressed") !== "true";
+  if (on) offOthers("ent");
+  btnEnt.setAttribute("aria-pressed", on);
+  legend.classList.toggle("on", on);
+  drawEntrances();
+  if (on && !entLayer.getLayers().length) toast("아직 입력된 진입 가능 출입구가 없습니다");
+};
+
+// ---------- 5. 버튼: 장애인 화장실 위치 ----------
+const btnWc = document.getElementById("btn-wc");
+function setWc(on) {
+  wcOn = on;
+  btnWc.setAttribute("aria-pressed", on);
+  refreshLit();
+}
+btnWc.onclick = () => {
+  wcOn = btnWc.getAttribute("aria-pressed") !== "true";
+  if (wcOn) offOthers("wc");
+  btnWc.setAttribute("aria-pressed", wcOn);
+  refreshLit();
+  if (wcOn) {
+    const hits = Object.values(B).filter((b) => b.p.restroom_count > 0);
+    hits.forEach((b) => b.els().forEach((el) => blink(el)));
+    toast(hits.length ? `장애인 화장실이 있는 건물 ${hits.length}곳` : "아직 입력된 장애인 화장실이 없습니다");
+  }
+};
+
+// ===== 보행 네트워크: 경사 등급별 표시 =====
+const SLOPE_COLORS = {
+  '기준충족': '#2E9E4F',
+  '완화기준': '#F2A900',
+  '기준초과': '#D7301F',
+  '정보없음': '#9AA0A6'
+};
+
+const slopeLayer = L.geoJSON(NET_LINKS, {
+  style: f => ({
+    color: SLOPE_COLORS[f.properties.slp_cls] || '#9AA0A6',
+    weight: 4,
+    opacity: 0.9
+  }),
+  onEachFeature: (f, layer) => {
+    const p = f.properties;
+    const deg = p.d_slope == null ? '-' : p.d_slope.toFixed(1) + '°';
+    layer.bindTooltip(`${p.slp_cls} · ${deg}`);
+  }
+});   // 처음 화면에서는 꺼 둠 (오른쪽 위 버튼으로 켜기)
+
+// ===== 경로 탐색 (브라우저 다익스트라) =====
+// 나중에 pgRouting으로 바꿀 때는 findRoute() 안쪽만 교체
+const GRAPH = {};
+const LINK_BY_ID = {};
+
+NET_LINKS.features.forEach(f => {
+  const p = f.properties;
+  if (p.cost == null || p.cost < 0) return;   // 통과 불가 링크 제외
+  LINK_BY_ID[p.link_id] = f;
+  (GRAPH[p.source] ||= []).push({ to: p.target, cost: p.cost, link: p.link_id });
+  (GRAPH[p.target] ||= []).push({ to: p.source, cost: p.cost, link: p.link_id });
+});
+
+function entranceNode(entId) {
+  const f = NET_ENTRANCES.features.find(f => f.properties.entranceID === entId);
+  return f ? f.properties.node_id : null;
+}
+
+function findRoute(startNode, endNode) {
+  const dist = { [startNode]: 0 };
+  const prev = {};
+  const visited = new Set();
+  const queue = [[0, startNode]];
+
+  while (queue.length) {
+    queue.sort((a, b) => a[0] - b[0]);
+    const [d, node] = queue.shift();
+    if (visited.has(node)) continue;
+    visited.add(node);
+    if (node === endNode) break;
+
+    for (const e of (GRAPH[node] || [])) {
+      const nd = d + e.cost;
+      if (dist[e.to] === undefined || nd < dist[e.to]) {
+        dist[e.to] = nd;
+        prev[e.to] = { node, link: e.link };
+        queue.push([nd, e.to]);
+      }
+    }
+  }
+
+  if (dist[endNode] === undefined) return null;   // 경로 없음
+
+  const links = [];
+  let cur = endNode;
+  while (cur !== startNode) {
+    links.unshift(prev[cur].link);
+    cur = prev[cur].node;
+  }
+  const length = links.reduce((s, id) => s + LINK_BY_ID[id].properties.length, 0);
+  return { cost: dist[endNode], length, links };
+}
+
+// ===== 경로 지도 표시 =====
+let routeLayer = null;
+
+function drawRoute(startEnt, endEnt) {
+  const s = entranceNode(startEnt);
+  const e = entranceNode(endEnt);
+  if (s == null || e == null) return null;
+
+  const r = findRoute(s, e);
+  if (routeLayer) { map.removeLayer(routeLayer); routeLayer = null; }
+  if (!r) return null;
+
+  const fc = { type: 'FeatureCollection', features: r.links.map(id => LINK_BY_ID[id]) };
+
+  const halo = L.geoJSON(fc, {
+    style: { color: '#1E3A8A', weight: 11, opacity: 0.55 }
+  });
+  const line = L.geoJSON(fc, {
+    style: f => ({
+      color: SLOPE_COLORS[f.properties.slp_cls] || '#9AA0A6',
+      weight: 5,
+      opacity: 1
+    })
+  });
+
+  routeLayer = L.layerGroup([halo, line]).addTo(map);
+  const pr = document.getElementById("route-panel")?.getBoundingClientRect();
+  const wide = window.innerWidth > 900;
+  map.fitBounds(halo.getBounds(), {
+    paddingTopLeft: [wide && pr ? pr.right + 30 : 30,
+      wide ? (document.querySelector(".slope-toggle")?.getBoundingClientRect().bottom || 40) + 20 : (pr ? pr.bottom + 20 : 40)],
+    paddingBottomRight: [40, dockHeight() + 30],
+  });
+  return r;
+}
+// ===== 경사 등급 레이어 켜기/끄기 버튼 =====
+const SlopeToggle = L.Control.extend({
+  options: { position: 'topright' },
+  onAdd: function () {
+    const box = L.DomUtil.create('div', 'leaflet-bar slope-toggle');
+    box.innerHTML = `
+      <button type="button" class="slope-btn">길 경사 등급 켜기</button>
+      <div class="slope-legend" style="display:none">
+        ${Object.entries(SLOPE_COLORS)
+          .map(([k, c]) => `<div><span style="background:${c}"></span>${k}</div>`)
+          .join('')}
+      </div>`;
+    L.DomEvent.disableClickPropagation(box);
+
+    const btn = box.querySelector('.slope-btn');
+    const legend = box.querySelector('.slope-legend');
+
+    btn.addEventListener('click', () => {
+      if (map.hasLayer(slopeLayer)) {
+        map.removeLayer(slopeLayer);
+        btn.textContent = '길 경사 등급 켜기';
+        legend.style.display = 'none';
+      } else {
+        slopeLayer.addTo(map);
+        btn.textContent = '길 경사 등급 끄기';
+        legend.style.display = 'block';
+        if (routeLayer) routeLayer.eachLayer(l => l.bringToFront());  // 경로가 위에 오도록
+      }
+    });
+    return box;
+  }
+});
+map.addControl(new SlopeToggle());
+
+// ===== 길찾기 =====
+// ===== 출입구 표시 이름 (data.js = 엑셀 변환 결과에서 자동 생성) =====
+const BLD_NAME = {};
+BF_DATA.buildings.features.forEach(f => {
+  BLD_NAME[f.properties.building_id] = f.properties.name;
+});
+
+const ENT_LABELS = {};
+BF_DATA.entrances.features.forEach(f => {
+  const p = f.properties;
+  const bid = p.entrance_id.split('-')[0];   // 출입구 ID 앞부분(B02)으로 건물 찾기
+  const ename = (p.name || p.entrance_id).trim();
+  ENT_LABELS[p.entrance_id] = `${BLD_NAME[bid] || bid} - ${ename}`;
+});
+
+// ===== 길찾기: 지도에서 출입구를 눌러 출발·도착 선택 =====
+map.createPane("routePick");
+map.getPane("routePick").style.zIndex = 650;   // 다른 점들보다 위에 (누르기 쉽게)
+
+const pickLayer = L.layerGroup();   // 고를 수 있는 출입구 (길찾기 켰을 때만)
+const pinLayer = L.layerGroup();    // 출발·도착 표시
+let pickStart = null, pickEnd = null;
+const entLabel = (id) => ENT_LABELS[id] || id;
+
+NET_ENTRANCES.features.forEach((f) => {
+  const id = f.properties.entranceID;
+  const [lng, lat] = f.geometry.coordinates;
+  const m = L.circleMarker([lat, lng], {
+    pane: "routePick", radius: 10, color: "#1C4A86", weight: 3.5, fillColor: "#fff", fillOpacity: 1, className: "pick-dot",
+  });
+  m.bindTooltip(esc(entLabel(id)), { direction: "top", offset: [0, -8] });
+  m.on("click", () => choose(id, [lat, lng]));
+  pickLayer.addLayer(m);
+});
+
+const routePanel = document.createElement("div");
+routePanel.id = "route-panel";
+routePanel.className = "route-panel";
+routePanel.setAttribute("role", "dialog");
+routePanel.setAttribute("aria-label", "휠체어 경로 찾기");
+routePanel.innerHTML = `
+  <div class="rp-head">
+    <span class="rp-title">휠체어 경로 찾기</span>
+    <button type="button" class="rp-close" aria-label="길찾기 닫기">×</button>
+  </div>
+  <dl class="rp-sel">
+    <dt><span class="pin pin-start">출발</span></dt><dd id="rp-start"></dd>
+    <dt><span class="pin pin-end">도착</span></dt><dd id="rp-end"></dd>
+  </dl>
+  <div id="rp-result" aria-live="polite"></div>
+  <div class="rp-actions">
+    <button type="button" id="rp-swap">출발·도착 바꾸기</button>
+    <button type="button" id="rp-reset">다시 선택</button>
+  </div>`;
+document.body.appendChild(routePanel);
+L.DomEvent.disableClickPropagation(routePanel);
+L.DomEvent.disableScrollPropagation(routePanel);
+
+const btnRoute = document.getElementById("btn-route");
+const rpStart = routePanel.querySelector("#rp-start");
+const rpEnd = routePanel.querySelector("#rp-end");
+const rpResult = routePanel.querySelector("#rp-result");
+const rpSwap = routePanel.querySelector("#rp-swap");
+const rpReset = routePanel.querySelector("#rp-reset");
+
+const pin = (ll, text, cls) => L.marker(ll, {
+  pane: "routePick", interactive: false, keyboard: false,
+  icon: L.divIcon({ className: "", iconSize: null, html: `<span class="map-pin"><span class="pin ${cls}">${text}</span></span>` }),
+});
+
+function clearRoute() {
+  if (routeLayer) { map.removeLayer(routeLayer); routeLayer = null; }
+}
+
+// 출입구를 누를 때: 출발 → 도착 순서. 둘 다 정해진 뒤 다시 누르면 새 출발지로 시작
+function choose(id, ll) {
+  if (!pickStart || pickEnd) {
+    pickStart = { id, ll }; pickEnd = null; clearRoute();
+  } else if (id === pickStart.id) {
+    return;
+  } else {
+    pickEnd = { id, ll };
+  }
+  render();
+}
+
+function render() {
+  pinLayer.clearLayers();
+  if (pickStart) pinLayer.addLayer(pin(pickStart.ll, "출발", "pin-start"));
+  if (pickEnd) pinLayer.addLayer(pin(pickEnd.ll, "도착", "pin-end"));
+
+  rpStart.textContent = pickStart ? entLabel(pickStart.id) : "지도에서 출입구를 누르세요";
+  rpStart.classList.toggle("empty", !pickStart);
+  rpEnd.textContent = pickEnd ? entLabel(pickEnd.id) : (pickStart ? "지도에서 출입구를 누르세요" : "출발지를 먼저 고르세요");
+  rpEnd.classList.toggle("empty", !pickEnd);
+  rpSwap.disabled = !(pickStart && pickEnd);
+  rpReset.disabled = !pickStart;
+
+  if (!pickStart || !pickEnd) {
+    rpResult.textContent = pickStart ? "도착할 출입구를 지도에서 누르세요." : "출발할 출입구를 지도에서 누르세요.";
+    return;
+  }
+
+  const r = drawRoute(pickStart.id, pickEnd.id);
+  if (!r) { rpResult.textContent = "휠체어로 이동할 수 있는 경로가 없습니다. 다른 출입구를 골라 보세요."; return; }
+
+  const steep = r.links.map((id) => LINK_BY_ID[id].properties).filter((p) => p.slp_cls === "기준초과");
+  const steepLen = steep.reduce((a, p) => a + p.length, 0);
+  const min = Math.max(1, Math.round(r.length / 0.8 / 60));
+  rpResult.innerHTML = `거리 <b>${Math.round(r.length)}m</b>, 약 <b>${min}분</b><br>` +
+    (steep.length
+      ? `<span class="rp-warn">급경사 구간 ${steep.length}곳 (${Math.round(steepLen)}m)</span>`
+      : "급경사 구간 없음");
+}
+
+function openRoute() {
+  offOthers("route");
+  map.closePopup();
+  if (selected) { selected = null; refreshLit(); }
+  map.getContainer().classList.add("route-mode");
+  btnRoute.setAttribute("aria-pressed", "true");
+  routePanel.classList.add("open");
+  pickLayer.addTo(map);
+  pinLayer.addTo(map);
+  render();
+}
+function closeRoute() {
+  map.getContainer().classList.remove("route-mode");
+  btnRoute.setAttribute("aria-pressed", "false");
+  routePanel.classList.remove("open");
+  pickStart = pickEnd = null;
+  clearRoute();
+  pinLayer.clearLayers();
+  map.removeLayer(pickLayer);
+  map.removeLayer(pinLayer);
+}
+
+btnRoute.addEventListener("click", () => {
+  if (routePanel.classList.contains("open")) closeRoute(); else openRoute();
+});
+routePanel.querySelector(".rp-close").addEventListener("click", closeRoute);
+rpSwap.addEventListener("click", () => { [pickStart, pickEnd] = [pickEnd, pickStart]; render(); });
+rpReset.addEventListener("click", () => { pickStart = pickEnd = null; clearRoute(); render(); });
+
+// ===== 메뉴바 높이 (지도 표기·경로 화면 맞춤에 사용) =====
+const dockEl = document.querySelector(".dock");
+function dockHeight() { return dockEl.getBoundingClientRect().height; }
+function syncDock() { document.documentElement.style.setProperty("--dock-h", dockHeight() + "px"); }
+new ResizeObserver(syncDock).observe(dockEl);
+syncDock();
+
+// ===== 처음 화면: 캠퍼스 보행로 전체가 꽉 차게 확대 =====
+function fitCampus() {
+  const titleBottom = document.querySelector(".title").getBoundingClientRect().bottom;
+  map.fitBounds(L.geoJSON(NET_LINKS).getBounds(), {
+    paddingTopLeft: [20, titleBottom + 10],
+    paddingBottomRight: [20, dockHeight() + 10],
+  });
+}
+fitCampus();
+
+// ===== 아래 세 기능은 한 번에 하나만: 하나를 켜면 나머지는 자동으로 꺼짐 =====
+function offOthers(keep) {
+  if (keep !== "ent" && btnEnt.getAttribute("aria-pressed") === "true") setEnt(false);
+  if (keep !== "wc" && wcOn) setWc(false);
+  if (keep !== "route" && routePanel.classList.contains("open")) closeRoute();
+  map.closePopup();
+  if (selected) { selected = null; refreshLit(); }   // 선택했던 건물 강조도 해제
+  document.querySelectorAll(".bld-shape.blink, .bld-tag.blink").forEach((el) => el.classList.remove("blink"));
+}
+</script>
+</body>
+</html>
