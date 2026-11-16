@@ -20,26 +20,27 @@
     --ink: #1E2530;
     --muted: #6B7685;
     --line: #E3E7EC;
-    --flash: #FFD400;     /* 경계 표시 */
-    --ok: #1F8A5B;        /* 경로 색상 - 휠체어 진입 가능 */
-    --limited: #C98A00;   /* 경로 색상 - 제한적 */
-    --warn: #C8372D;      /* 경로 색상 - 주의사항 */
-    --ui: 2.0;   /* 버튼·팝업 전체 크기 배율 */
+    --flash: #FFD400;     /* 반짝이는 경계 (PPT의 노란 테두리) */
+    --ok: #1F8A5B;        /* 휠체어 진입 가능 */
+    --limited: #C98A00;   /* 제한적 */
+    --warn: #C8372D;      /* 주의사항 */
+    /* ===== 화면 크기 배율: 글씨·버튼·팝업이 작거나 크면 이 숫자만 바꾸세요 (1 = 기본) ===== */
+    --ui: 2.0;   /* 버튼·팝업 전체 크기 배율 (키우려면 숫자를 올리기) */
     /* 오른쪽 위 확대·축소, 배경지도 버튼 크기 배율 */
-    --ctrl: 2.0;
+    --ctrl: 1.8;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; font-family: Pretendard, "Malgun Gothic", sans-serif; color: var(--ink); }
   #map { position: fixed; inset: 0; background: #2b2f33; }
 
-  /* 좌상단 제목
+  /* 좌상단 제목 */
   .title {
     position: fixed; z-index: 1000; left: 14px; top: calc(14px + env(safe-area-inset-top, 0px));
     background: var(--inha); color: #fff; padding: calc(var(--ui) * 9px) calc(var(--ui) * 14px); border-radius: 10px;
     font-weight: 700; font-size: calc(var(--ui) * 17px); letter-spacing: -0.02em; box-shadow: 0 2px 8px rgba(0,0,0,.3);
-  } */
+  }
 
-  /* 하단 메뉴바: 버튼 3개 */
+  /* 하단 메뉴바: 버튼 3개를 나란히 */
   .dock {
     position: fixed; z-index: 1000; left: 0; right: 0; bottom: 0;
     display: flex; justify-content: center; gap: calc(var(--ui) * 10px);
@@ -58,7 +59,7 @@
   /* 지도 오른쪽 아래 표기(출처)가 메뉴바에 가리지 않게 */
   .leaflet-bottom { bottom: var(--dock-h, 0px); }
 
-  /* 출입구 범례: 메뉴바 위, 화면 가운데 */
+  /* 출입구 범례: 메뉴바 위, 화면 가운데 (버튼 켰을 때만) */
   .legend {
     position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(100% + var(--ui) * 10px);
     display: none; flex-direction: row; flex-wrap: wrap; align-items: center; gap: calc(var(--ui) * 6px);
@@ -95,6 +96,7 @@
   /* 건물 외곽선: 평소엔 보이지 않고, 클릭·화장실 버튼으로 lit 될 때만 표시 */
   .bld-shape { cursor: pointer; }
   .bld-shape.lit { stroke: var(--flash); stroke-opacity: 1; stroke-width: 4px; fill: var(--flash); fill-opacity: .12; }
+  /* 외곽선(WKT)이 없는 건물은 이름표로 표시 */
   .bld-tag {
     background: rgba(28,74,134,.92); color: #fff; border-radius: 6px; padding: 3px 8px;
     font: 600 calc(var(--ui) * 13px) Pretendard, sans-serif; white-space: nowrap; cursor: pointer;
@@ -103,7 +105,7 @@
   }
   .bld-tag.lit { border-color: var(--flash); background: var(--ink); }
 
-  /* 건물 선택 시 반짝임 애니메이션 */
+  /* 반짝임: 건물 경계 2번, 천천히·은은하게 */
   @keyframes flash-shape { 0%,100% { stroke-opacity: 1; } 50% { stroke-opacity: .45; } }
   @keyframes flash-tag   { 0%,100% { box-shadow: 0 0 0 0 var(--flash); } 50% { box-shadow: 0 0 0 3px var(--flash); } }
   @keyframes flash-dot   { 0%,100% { opacity: 1; } 50% { opacity: .5; } }   /* 흐려지는 정도: .5 (1에 가까울수록 약하게) */
@@ -134,15 +136,15 @@
   .leaflet-control-layers-expanded { font-size: calc(var(--ctrl) * 13px); padding: 10px 16px; line-height: 1.9; }
   .leaflet-control-layers-selector { width: calc(var(--ctrl) * 11px); height: calc(var(--ctrl) * 11px); margin-right: 6px; vertical-align: -2px; }
 
-  /* 오류 메시지 */
+  /* data.js 없음 */
   .err { position: fixed; z-index: 1002; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,.55); }
   .err div { background: #fff; max-width: 420px; padding: 20px 22px; border-radius: 10px; line-height: 1.6; }
   .err h2 { margin: 0 0 8px; font-size: 17px; color: var(--warn); }
 
   @media (max-width: 560px) {
-    :root { --ui: 1.2; --ctrl: 1.4; }   /* 휴대폰 배율 */
-    .dock { gap: 8px; padding: 8px 10px calc(8px + env(safe-area-inset-bottom, 0px)); }
-    .dock > button { max-width: none; font-size: 16px; padding: 11px 6px; }
+    :root { --ui: 0.95; --ctrl: 1.2; }   /* 휴대폰 배율 (크거나 작으면 이 숫자 조절) */
+    .dock { gap: 6px; padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px)); }
+    .dock > button { max-width: none; font-size: 14px; padding: 9px 4px; }
   }
   .slope-toggle { background: #fff; padding: calc(var(--ui) * 6px) calc(var(--ui) * 8px); font-size: calc(var(--ui) * 13px); border-radius: 10px !important; }
   .slope-btn {
@@ -153,7 +155,7 @@
   .slope-legend div { display: flex; align-items: center; gap: 6px; margin: 2px 0; }
   .slope-legend span { width: calc(var(--ui) * 18px); height: calc(var(--ui) * 4px); border-radius: 2px; display: inline-block; }
 
-  /* 길찾기 패널 (위치 수정 필요) */
+  /* 길찾기 패널: 제목 아래 왼쪽 위 (지도를 가리지 않게) */
   .route-panel {
     display: none;
     position: fixed; z-index: 1100; left: 14px; top: calc(28px + var(--ui) * 46px + env(safe-area-inset-top, 0px));
@@ -225,6 +227,9 @@ const DOOR = { automatic: "자동문", hinged: "여닫이", sliding: "미닫이"
 const WC_TYPE = { unisex: "남녀공용", male: "남", female: "여", unknown: "" };
 const WC_STATE = { in_service: "", broken: "고장", locked: "잠김", unknown: "" };
 const ENT = { yes: ["휠체어 진입 가능", "#1F8A5B"], limited: ["제한적", "#C98A00"] };
+// 지도 위 점 크기 (휴대폰에서는 작게)
+const DOT_R = window.matchMedia("(max-width: 560px)").matches ? 7 : 10;
+// 출입문 종류별 색 (길 경사 등급의 초록·노랑·빨강과 겹치지 않게)
 const DOOR_COLORS = {
   automatic: "#29B6F6",  // 자동문: 하늘색
   hinged:    "#EC4899",  // 여닫이: 핑크
@@ -241,12 +246,15 @@ const floorName = (f) => f == null ? "" : (f < 0 ? `지하 ${-f}층` : `${f}층`
 // ---------- 2. 지도 (인하대 고정) ----------
 const CAMPUS = L.latLngBounds([37.4460, 126.6480], [37.4555, 126.6625]);
 const map = L.map("map", {
-  maxBounds: CAMPUS.pad(0.15), maxBoundsViscosity: 1.0, minZoom: 16, maxZoom: 20, zoomControl: false,
+  maxBounds: CAMPUS.pad(1.0), maxBoundsViscosity: 1.0, minZoom: 15, maxZoom: 20, zoomControl: false,   /* 휴대폰처럼 좁은 화면에서도 캠퍼스 전체가 들어오게 */
   zoomSnap: 0.25,   /* 처음 화면을 캠퍼스에 딱 맞게 */
 }).setView([37.4505, 126.6555], 17);
 L.control.zoom({ position: "topright" }).addTo(map);
 
 // =================== 브이월드 인증키 ===================
+// 브이월드(vworld.kr) > 오픈API > 인증키 발급에서 받은 키를 따옴표 안에 붙여넣으세요.
+// 예) const VWORLD_KEY = "1A2B3C4D-....";
+// 브이월드는 키 하나에 서비스 URL 하나만 등록되므로, 접속한 주소에 맞는 키를 골라 씀
 const VWORLD_KEYS = {
   "localhost":          "",   // 내 컴퓨터 (VS Code Live Server)
   "127.0.0.1":          "",
@@ -370,7 +378,7 @@ const okEntrances = {
 };
 const entLayer = L.geoJSON(okEntrances, {
   pointToLayer: (f, latlng) => L.circleMarker(latlng, {
-    radius: 10, color: "#fff", weight: 3, fillOpacity: 1, className: "ent-dot",
+    radius: DOT_R, color: "#fff", weight: DOT_R > 8 ? 3 : 2, fillOpacity: 1, className: "ent-dot",
     fillColor: DOOR_COLORS[doorKey(f.properties)],
   }),
   onEachFeature: (f, layer) => {
@@ -630,7 +638,7 @@ NET_ENTRANCES.features.forEach((f) => {
   const id = f.properties.entranceID;
   const [lng, lat] = f.geometry.coordinates;
   const m = L.circleMarker([lat, lng], {
-    pane: "routePick", radius: 10, color: "#1C4A86", weight: 3.5, fillColor: "#fff", fillOpacity: 1, className: "pick-dot",
+    pane: "routePick", radius: DOT_R, color: "#1C4A86", weight: DOT_R > 8 ? 3.5 : 2.5, fillColor: "#fff", fillOpacity: 1, className: "pick-dot",
   });
   m.bindTooltip(esc(entLabel(id)), { direction: "top", offset: [0, -8] });
   m.on("click", () => choose(id, [lat, lng]));
