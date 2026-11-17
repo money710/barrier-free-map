@@ -458,6 +458,18 @@ const SLOPE_COLORS = {
   '정보없음': '#9AA0A6'
 };
 
+// ===== 경사 등급 값 맞추기 (영어 값·공백이 있어도 한글 등급으로 통일) =====
+const CLS_MAP = {
+  "Meets standard": "기준충족",
+  "Relaxed standard": "완화기준",
+  "Exceeds standard": "기준초과",
+  "No data": "정보없음",
+};
+NET_LINKS.features.forEach((f) => {
+  const c = (f.properties.slp_cls ?? "").toString().trim();
+  f.properties.slp_cls = CLS_MAP[c] || c || "정보없음";
+});
+
 const slopeLayer = L.geoJSON(NET_LINKS, {
   style: f => ({
     color: SLOPE_COLORS[f.properties.slp_cls] || '#9AA0A6',
@@ -473,15 +485,27 @@ const slopeLayer = L.geoJSON(NET_LINKS, {
 
 // ===== 경로 탐색 (브라우저 다익스트라) =====
 // 나중에 pgRouting으로 바꿀 때는 findRoute() 안쪽만 교체
+// 비용 계산: 링크의 길이와 경사 등급(slp_cls)으로 그때그때 계산 (QGIS의 cost 필드는 안 씀)
+const RELAXED_W = 1.5;     // 완화기준 구간: 거리 × 1.5
+const STEEP_W = 1000;      // 2차 탐색에서 급경사 1m = 평지 1000m (급경사를 최대한 덜 지나는 길을 고르게)
+const COST_AVOID = (p) => {   // 1차: 급경사(기준초과)는 아예 지나가지 않음
+  if (p.slp_cls === "기준초과" || p.slp_cls === "정보없음") return null;
+  return p.length * (p.slp_cls === "완화기준" ? RELAXED_W : 1);
+};
+const COST_LEAST_STEEP = (p) => {   // 2차: 피할 수 없을 때만, 급경사 길이를 최소로
+  if (p.slp_cls === "정보없음") return null;
+  const base = p.length * (p.slp_cls === "완화기준" ? RELAXED_W : 1);
+  return p.slp_cls === "기준초과" ? base + p.length * STEEP_W : base;
+};
+
 const GRAPH = {};
 const LINK_BY_ID = {};
-
-NET_LINKS.features.forEach(f => {
+NET_LINKS.features.forEach((f) => {
   const p = f.properties;
-  if (p.cost == null || p.cost < 0) return;   // 통과 불가 링크 제외
+  if (p.length == null) return;
   LINK_BY_ID[p.link_id] = f;
-  (GRAPH[p.source] ||= []).push({ to: p.target, cost: p.cost, link: p.link_id });
-  (GRAPH[p.target] ||= []).push({ to: p.source, cost: p.cost, link: p.link_id });
+  (GRAPH[p.source] ||= []).push({ to: p.target, link: p.link_id });
+  (GRAPH[p.target] ||= []).push({ to: p.source, link: p.link_id });
 });
 
 function entranceNode(entId) {
@@ -489,7 +513,8 @@ function entranceNode(entId) {
   return f ? f.properties.node_id : null;
 }
 
-function findRoute(startNode, endNode) {
+// 다익스트라 한 번 실행 (costFn이 null을 주는 링크는 지나가지 않음)
+function dijkstra(startNode, endNode, costFn) {
   const dist = { [startNode]: 0 };
   const prev = {};
   const visited = new Set();
@@ -503,7 +528,9 @@ function findRoute(startNode, endNode) {
     if (node === endNode) break;
 
     for (const e of (GRAPH[node] || [])) {
-      const nd = d + e.cost;
+      const c = costFn(LINK_BY_ID[e.link].properties);
+      if (c == null) continue;
+      const nd = d + c;
       if (dist[e.to] === undefined || nd < dist[e.to]) {
         dist[e.to] = nd;
         prev[e.to] = { node, link: e.link };
@@ -522,6 +549,15 @@ function findRoute(startNode, endNode) {
   }
   const length = links.reduce((s, id) => s + LINK_BY_ID[id].properties.length, 0);
   return { cost: dist[endNode], length, links };
+}
+
+// 경로 찾기: 1차로 급경사를 피하는 길, 없으면 2차로 급경사를 가장 덜 지나는 길
+// (나중에 pgRouting으로 바꿀 때는 이 함수 안쪽만 교체)
+function findRoute(startNode, endNode) {
+  const avoid = dijkstra(startNode, endNode, COST_AVOID);
+  if (avoid) return { ...avoid, steepUnavoidable: false };
+  const least = dijkstra(startNode, endNode, COST_LEAST_STEEP);
+  return least ? { ...least, steepUnavoidable: true } : null;
 }
 
 // ===== 경로 지도 표시 =====
@@ -688,7 +724,7 @@ function render() {
   const min = Math.max(1, Math.round(r.length / 0.8 / 60));
   rpResult.innerHTML = `거리 <b>${Math.round(r.length)}m</b>, 약 <b>${min}분</b><br>` +
     (steep.length
-      ? `<span class="rp-warn">급경사 구간 ${steep.length}곳 (${Math.round(steepLen)}m)</span>`
+      ? `<span class="rp-warn">급경사를 피할 수 없는 경로입니다<br>급경사 구간 ${steep.length}곳 (${Math.round(steepLen)}m)</span>`
       : "급경사 구간 없음");
 }
 
