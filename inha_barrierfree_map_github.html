@@ -13,11 +13,7 @@
   // 브라우저가 예전 data.js를 기억하지 않도록 매번 새로 읽음
   document.write('<script src="data.js?v=' + Date.now() + '"><\/script>');
 </script>
-<script>
-  // 브라우저가 예전 data.js, network.js를 기억하지 않도록 매번 새로 읽음
-  document.write('<script src="data.js?v=' + Date.now() + '"><\/script>');
-  document.write('<script src="network.js?v=' + Date.now() + '"><\/script>');
-</script>
+<script src="network.js"></script>
 <style>
   :root {
     --inha: #1C4A86;      /* 인하 블루 */
