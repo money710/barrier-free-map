@@ -1,7 +1,7 @@
 const NET_LINKS = 
 {
 "type": "FeatureCollection",
-"name": "links_117_4326",
+"name": "links_1117_4326",
 "crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } },
 "features": [
 {"type":"Feature","properties":{"cat":1,"link_id":"1","sd_number":1.0,"sd_minimum":2.01716184616089,"sd_maximum":2.01716184616089,"sd_median":2.01716,"source":205,"target":87,"ramp_deg":null,"ent_id":null,"d_slope":2.017,"slp_cls":"Meets standard","length":26.369},"geometry":{"type":"MultiLineString","coordinates":[[[126.653926899999988,37.4476381],[126.6539125,37.4475753],[126.653931699999987,37.4475286],[126.653976983248185,37.447489544073228],[126.654056,37.4474559]]]}},
@@ -300,8 +300,8 @@ const NET_LINKS =
 {"type":"Feature","properties":{"cat":295,"link_id":"295","sd_number":3.0,"sd_minimum":4.6864690780639604,"sd_maximum":6.8989553451538104,"sd_median":5.36262,"source":114,"target":124,"ramp_deg":null,"ent_id":null,"d_slope":5.363,"slp_cls":"Exceeds standard","length":4.725},"geometry":{"type":"MultiLineString","coordinates":[[[126.6525249,37.4507786],[126.652550853510718,37.450815809335921]]]}},
 {"type":"Feature","properties":{"cat":296,"link_id":"296","sd_number":3.0,"sd_minimum":1.52909648418427,"sd_maximum":2.4903471469879199,"sd_median":2.38811,"source":123,"target":121,"ramp_deg":11.9,"ent_id":"B08-03","d_slope":11.9,"slp_cls":"Exceeds standard","length":2.526},"geometry":{"type":"MultiLineString","coordinates":[[[126.6572666,37.4501815],[126.6572825,37.4502004]]]}},
 {"type":"Feature","properties":{"cat":297,"link_id":"297","sd_number":7.0,"sd_minimum":0.26461750268936202,"sd_maximum":1.2504688501357999,"sd_median":0.805543,"source":120,"target":87,"ramp_deg":null,"ent_id":null,"d_slope":0.806,"slp_cls":"Meets standard","length":66.113},"geometry":{"type":"MultiLineString","coordinates":[[[126.654690917205514,37.447259562178147],[126.654088094996567,37.44750551486235],[126.654056027598003,37.447455925554685]]]}},
-{"type":"Feature","properties":{"cat":298,"link_id":"298","sd_number":39.0,"sd_minimum":0.532121062278748,"sd_maximum":5.88065528869629,"sd_median":1.93653,"source":140,"target":139,"ramp_deg":null,"ent_id":null,"d_slope":1.937,"slp_cls":"Meets standard","length":51.676},"geometry":{"type":"MultiLineString","coordinates":[[[126.6528289,37.4476508],[126.653341021016132,37.447427016085598]]]}}
-{"type":"Feature","properties":{"cat":299,"link_id":"299","sd_number":null,"sd_minimum":null,"sd_maximum":null,"sd_median":null,"source":117,"target":110,"ramp_deg":null,"ent_id":null,"d_slope":2.658,"slp_cls":"Meets standard","length":99.897},"geometry":{"type":"MultiLineString","coordinates":[[[126.656436409691992,37.451025183525466],[126.6564637,37.4501565]]]}}
+{"type":"Feature","properties":{"cat":298,"link_id":"298","sd_number":39.0,"sd_minimum":0.532121062278748,"sd_maximum":5.88065528869629,"sd_median":1.93653,"source":140,"target":139,"ramp_deg":null,"ent_id":null,"d_slope":1.937,"slp_cls":"Meets standard","length":51.676},"geometry":{"type":"MultiLineString","coordinates":[[[126.6528289,37.4476508],[126.653341021016132,37.447427016085598]]]}},
+{"type":"Feature","properties":{"cat":null,"link_id":"299","sd_number":null,"sd_minimum":null,"sd_maximum":null,"sd_median":null,"source":117,"target":110,"ramp_deg":null,"ent_id":null,"d_slope":2.658,"slp_cls":"Meets standard","length":99.897},"geometry":{"type":"MultiLineString","coordinates":[[[126.656436409691992,37.451025183525466],[126.6564637,37.4501565]]]}}
 ]
 }
 ;
