@@ -92,6 +92,11 @@
   .legend .chip[aria-pressed="false"] > span { color: var(--muted); text-decoration: line-through; }
   .legend .chip:focus-visible { outline: 3px solid var(--flash); outline-offset: 2px; }
   .legend .chip small { font-weight: 500; color: var(--muted); }
+  /* 배리어프리 시설 선택 버튼: 하나만 고르는 방식 (안 고른 상태도 흐리게 하지 않음) */
+  .legend .chip.fac-chip[aria-pressed="false"] { color: var(--line); background: #fff; }
+  .legend .chip.fac-chip[aria-pressed="false"] > span { color: var(--ink); text-decoration: none; }
+  .legend .chip.fac-chip .dot { background: var(--c) !important; }
+  .legend .chip.fac-chip[aria-pressed="true"] { color: var(--c); box-shadow: inset 0 0 0 1.5px var(--c); background: #fff; }
   .dot { width: calc(var(--ui) * 12px); height: calc(var(--ui) * 12px); border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.3); }
 
   /* 안내 메시지 */
@@ -220,13 +225,16 @@
     <div class="legend" id="slope-legend" role="group" aria-label="길 경사 등급 범례">
       <div class="legend-title">길 경사 등급</div>
     </div>
+    <div class="legend" id="fac-legend" role="group" aria-label="배리어프리 시설 선택">
+      <div class="legend-title">배리어프리 시설</div>
+    </div>
     <div class="legend" id="legend" role="group" aria-label="출입문 종류 선택">
       <div class="legend-title">출입문 종류</div>
     </div>
   </div>
   <button id="btn-ent" aria-pressed="false">진입 가능<br>출입구</button>
   <button id="btn-route" aria-pressed="false">길찾기</button>
-  <button id="btn-wc" aria-pressed="false">배리어프리 시설<br>정보</button>
+  <button id="btn-wc" aria-pressed="false">배리어프리<br>시설 정보</button>
   <button id="btn-slope" aria-pressed="false">길 경사<br>등급</button>
 </nav>
 
@@ -332,7 +340,14 @@ function toast(msg, ms = 2200) {
 // ---------- 3. 건물 (클릭 → 경계 반짝 + 팝업) ----------
 const B = {};          // building_id → { p, layer, els(), center }
 let selected = null;   // 클릭으로 선택된 건물
-let wcOn = false;      // 화장실 버튼 상태
+let wcOn = false;      // '배리어프리 시설 정보' 버튼 상태
+let facSel = null;     // 고른 시설 (wc / elev / park)
+// 배리어프리 시설: 이름, 색, 이 건물에 있는지 판단하는 방법
+const FACILITIES = {
+  wc:   { label: "장애인 화장실", color: "#29B6F6", has: (p) => p.restroom_count > 0 },          // 하늘
+  elev: { label: "엘리베이터",   color: "#EC4899", has: (p) => p.elevator === "yes" },          // 핑크
+  park: { label: "장애인 주차장", color: "#8B5CF6", has: (p) => p.parking === "yes" || p.parking_count > 0 },   // 보라
+};
 
 function buildingPopup(p) {
   const wcs = p.restrooms || [];
@@ -350,17 +365,25 @@ function buildingPopup(p) {
       <dl>
         <dt>장애인 화장실</dt><dd>${wcHtml}</dd>
         <dt>엘리베이터</dt><dd>${elev}</dd>
+        <dt>장애인 주차장</dt><dd>${HAS[p.parking] ?? "미조사"}</dd>
         <dt>출입구 경사로</dt><dd>${HAS[p.entrance_ramp] ?? "미조사"}</dd>
       </dl>
       ${p.caution ? `<p class="caution">* ${esc(p.caution)}</p>` : ""}
     </div>`;
 }
 
-function setLit(id, on) {
-  B[id].els().forEach((el) => el.classList.toggle("lit", on));
+function setLit(id, on, color) {
+  B[id].els().forEach((el) => {
+    el.classList.toggle("lit", on);
+    if (color) el.style.setProperty("--flash", color); else el.style.removeProperty("--flash");
+  });
 }
 function refreshLit() {
-  for (const id in B) setLit(id, id === selected || (wcOn && B[id].p.restroom_count > 0));
+  for (const id in B) {
+    const fac = wcOn && facSel && FACILITIES[facSel].has(B[id].p);
+    // 클릭으로 고른 건물은 기본 노란색, 시설로 강조된 건물은 시설 색
+    setLit(id, id === selected || fac, id !== selected && fac ? FACILITIES[facSel].color : null);
+  }
 }
 
 BF_DATA.buildings.features.forEach((f) => {
@@ -465,23 +488,44 @@ btnEnt.onclick = () => {
   if (on && !entLayer.getLayers().length) toast("아직 입력된 진입 가능 출입구가 없습니다");
 };
 
-// ---------- 5. 버튼: 장애인 화장실 위치 ----------
+// ---------- 5. 버튼: 배리어프리 시설 정보 (시설을 고르면 해당 건물 경계가 시설 색으로 반짝) ----------
 const btnWc = document.getElementById("btn-wc");
+const facLegend = document.getElementById("fac-legend");
+const facChips = Object.entries(FACILITIES).map(([k, f]) => {
+  const n = Object.values(B).filter((b) => f.has(b.p)).length;
+  const c = document.createElement("button");
+  c.type = "button"; c.className = "chip fac-chip"; c.dataset.kind = k;
+  c.setAttribute("aria-pressed", "false");
+  c.style.setProperty("--c", f.color);
+  c.innerHTML = `<i class="dot"></i><span>${f.label}</span><small>${n}</small>`;
+  c.onclick = () => selectFacility(facSel === k ? null : k);   // 다시 누르면 해제
+  facLegend.appendChild(c);
+  return c;
+});
+L.DomEvent.disableClickPropagation(facLegend);
+
+function selectFacility(k) {
+  facSel = k;
+  facChips.forEach((c) => c.setAttribute("aria-pressed", c.dataset.kind === k));
+  refreshLit();
+  if (!k) return;
+  const f = FACILITIES[k];
+  const hits = Object.values(B).filter((b) => f.has(b.p));
+  hits.forEach((b) => b.els().forEach((el) => blink(el)));
+  toast(hits.length ? `${f.label}이(가) 있는 건물 ${hits.length}곳` : `아직 입력된 ${f.label} 정보가 없습니다`);
+}
 function setWc(on) {
   wcOn = on;
   btnWc.setAttribute("aria-pressed", on);
+  facLegend.classList.toggle("on", on);
+  if (!on) facSel = null;
+  facChips.forEach((c) => c.setAttribute("aria-pressed", c.dataset.kind === facSel));
   refreshLit();
 }
 btnWc.onclick = () => {
-  wcOn = btnWc.getAttribute("aria-pressed") !== "true";
-  if (wcOn) offOthers("wc");
-  btnWc.setAttribute("aria-pressed", wcOn);
-  refreshLit();
-  if (wcOn) {
-    const hits = Object.values(B).filter((b) => b.p.restroom_count > 0);
-    hits.forEach((b) => b.els().forEach((el) => blink(el)));
-    toast(hits.length ? `장애인 화장실이 있는 건물 ${hits.length}곳` : "아직 입력된 장애인 화장실이 없습니다");
-  }
+  const on = btnWc.getAttribute("aria-pressed") !== "true";
+  if (on) offOthers("wc");
+  setWc(on);
 };
 
 // ===== 보행 네트워크: 경사 등급별 표시 =====
@@ -717,10 +761,10 @@ const routePanel = document.createElement("div");
 routePanel.id = "route-panel";
 routePanel.className = "route-panel";
 routePanel.setAttribute("role", "dialog");
-routePanel.setAttribute("aria-label", "배리어프리 경로 찾기");
+routePanel.setAttribute("aria-label", "휠체어 경로 찾기");
 routePanel.innerHTML = `
   <div class="rp-head">
-    <span class="rp-title">배리어프리 경로 찾기</span>
+    <span class="rp-title">휠체어 경로 찾기</span>
     <button type="button" class="rp-close" aria-label="길찾기 닫기">×</button>
   </div>
   <div class="rp-sel">
@@ -797,7 +841,7 @@ function render() {
                        .map((id) => LINK_BY_ID[id].properties)
                        .filter((p) => p.slp_cls === "기준초과");
   const steepLen = steep.reduce((a, p) => a + p.length, 0);
-  const min = Math.max(1, Math.round(r.length / 0.73 / 60));
+  const min = Math.max(1, Math.round(r.length / 0.8 / 60));
 
   // 출입구 경사도 안내: 기준충족은 값만, 완화기준은 (완화기준), 기준초과는 (주의)
   const rampLine = (label, entId) => {
