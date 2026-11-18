@@ -226,7 +226,7 @@
   </div>
   <button id="btn-ent" aria-pressed="false">진입 가능<br>출입구</button>
   <button id="btn-route" aria-pressed="false">길찾기</button>
-  <button id="btn-wc" aria-pressed="false">장애인 화장실<br>위치</button>
+  <button id="btn-wc" aria-pressed="false">배리어프리 시설<br>정보</button>
   <button id="btn-slope" aria-pressed="false">길 경사<br>등급</button>
 </nav>
 
@@ -717,10 +717,10 @@ const routePanel = document.createElement("div");
 routePanel.id = "route-panel";
 routePanel.className = "route-panel";
 routePanel.setAttribute("role", "dialog");
-routePanel.setAttribute("aria-label", "휠체어 경로 찾기");
+routePanel.setAttribute("aria-label", "배리어프리 경로 찾기");
 routePanel.innerHTML = `
   <div class="rp-head">
-    <span class="rp-title">휠체어 경로 찾기</span>
+    <span class="rp-title">배리어프리 경로 찾기</span>
     <button type="button" class="rp-close" aria-label="길찾기 닫기">×</button>
   </div>
   <div class="rp-sel">
