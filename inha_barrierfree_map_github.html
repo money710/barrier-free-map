@@ -176,6 +176,8 @@
   .rp-sel dd.empty { color: var(--muted); font-weight: 500; }
   #rp-result { margin-top: calc(var(--ui) * 8px); padding-top: calc(var(--ui) * 8px); border-top: 1px solid var(--line); }
   .rp-warn { color: #D7301F; font-weight: 600; }
+  .rp-caution { color: #B7791F; font-weight: 600; }
+  .rp-ramp { margin-top: calc(var(--ui) * 6px); padding-top: calc(var(--ui) * 6px); border-top: 1px dashed var(--line); }
   .rp-actions { display: flex; gap: 6px; margin-top: calc(var(--ui) * 8px); }
   .rp-actions button {
     flex: 1; border: 1.5px solid var(--inha); background: #fff; color: var(--inha); border-radius: 8px;
@@ -510,11 +512,14 @@ const slopeLayer = L.geoJSON(NET_LINKS, {
 // 비용 계산: 링크의 길이와 경사 등급(slp_cls)으로 그때그때 계산 (QGIS의 cost 필드는 안 씀)
 const RELAXED_W = 1.5;     // 완화기준 구간: 거리 × 1.5
 const STEEP_W = 1000;      // 2차 탐색에서 급경사 1m = 평지 1000m (급경사를 최대한 덜 지나는 길을 고르게)
-const COST_AVOID = (p) => {   // 1차: 급경사(기준초과)는 아예 지나가지 않음
+// 출발·도착 출입구의 연결선(출입구 경사로)은 어차피 지나야 하므로 급경사 판단에서 뺌 (exempt)
+const COST_AVOID = (p, exempt) => {   // 1차: 급경사(기준초과)는 아예 지나가지 않음
+  if (exempt) return p.length;
   if (p.slp_cls === "기준초과" || p.slp_cls === "정보없음") return null;
   return p.length * (p.slp_cls === "완화기준" ? RELAXED_W : 1);
 };
-const COST_LEAST_STEEP = (p) => {   // 2차: 피할 수 없을 때만, 급경사 길이를 최소로
+const COST_LEAST_STEEP = (p, exempt) => {   // 2차: 피할 수 없을 때만, 급경사 길이를 최소로
+  if (exempt) return p.length;
   if (p.slp_cls === "정보없음") return null;
   const base = p.length * (p.slp_cls === "완화기준" ? RELAXED_W : 1);
   return p.slp_cls === "기준초과" ? base + p.length * STEEP_W : base;
@@ -536,7 +541,7 @@ function entranceNode(entId) {
 }
 
 // 다익스트라 한 번 실행 (costFn이 null을 주는 링크는 지나가지 않음)
-function dijkstra(startNode, endNode, costFn) {
+function dijkstra(startNode, endNode, costFn, exemptLinks = new Set()) {
   const dist = { [startNode]: 0 };
   const prev = {};
   const visited = new Set();
@@ -550,7 +555,7 @@ function dijkstra(startNode, endNode, costFn) {
     if (node === endNode) break;
 
     for (const e of (GRAPH[node] || [])) {
-      const c = costFn(LINK_BY_ID[e.link].properties);
+      const c = costFn(LINK_BY_ID[e.link].properties, exemptLinks.has(e.link));
       if (c == null) continue;
       const nd = d + c;
       if (dist[e.to] === undefined || nd < dist[e.to]) {
@@ -576,10 +581,12 @@ function dijkstra(startNode, endNode, costFn) {
 // 경로 찾기: 1차로 급경사를 피하는 길, 없으면 2차로 급경사를 가장 덜 지나는 길
 // (나중에 pgRouting으로 바꿀 때는 이 함수 안쪽만 교체)
 function findRoute(startNode, endNode) {
-  const avoid = dijkstra(startNode, endNode, COST_AVOID);
-  if (avoid) return { ...avoid, steepUnavoidable: false };
-  const least = dijkstra(startNode, endNode, COST_LEAST_STEEP);
-  return least ? { ...least, steepUnavoidable: true } : null;
+  // 출발·도착 출입구에 붙은 연결선 = 출입구 경사로 → 급경사 판단에서 제외하고 따로 안내
+  const exempt = new Set([...(GRAPH[startNode] || []), ...(GRAPH[endNode] || [])].map((e) => e.link));
+  const avoid = dijkstra(startNode, endNode, COST_AVOID, exempt);
+  if (avoid) return { ...avoid, exempt, steepUnavoidable: false };
+  const least = dijkstra(startNode, endNode, COST_LEAST_STEEP, exempt);
+  return least ? { ...least, exempt, steepUnavoidable: true } : null;
 }
 
 // ===== 경로 지도 표시 =====
@@ -608,10 +615,20 @@ function drawRoute(startEnt, endEnt) {
   });
 
   routeLayer = L.layerGroup([halo, line]).addTo(map);
-  map.fitBounds(halo.getBounds(), {
-    paddingTopLeft: [30, document.querySelector(".title").getBoundingClientRect().bottom + 20],
-    paddingBottomRight: [30, window.innerHeight - routePanel.getBoundingClientRect().top + 20],
-  });
+  // 지금 보고 있는 확대 상태는 그대로 두고, 경로가 화면(제목~팝업 사이)을 벗어날 때만 맞춤
+  const top = document.querySelector(".title").getBoundingClientRect().bottom + 20;
+  const bottom = routePanel.getBoundingClientRect().top - 20;
+  const rb = halo.getBounds();
+  const nw = map.latLngToContainerPoint(rb.getNorthWest());
+  const se = map.latLngToContainerPoint(rb.getSouthEast());
+  const size = map.getSize();
+  const visible = nw.x >= 20 && se.x <= size.x - 20 && nw.y >= top && se.y <= bottom;
+  if (!visible) {
+    map.fitBounds(rb, {
+      paddingTopLeft: [30, top],
+      paddingBottomRight: [30, window.innerHeight - bottom],
+    });
+  }
   return r;
 }
 // ===== 길 경사 등급 켜기/끄기 (메뉴바 버튼) =====
@@ -740,13 +757,29 @@ function render() {
   const r = drawRoute(pickStart.id, pickEnd.id);
   if (!r) { rpResult.textContent = "휠체어로 이동할 수 있는 경로가 없습니다. 다른 출입구를 골라 보세요."; return; }
 
-  const steep = r.links.map((id) => LINK_BY_ID[id].properties).filter((p) => p.slp_cls === "기준초과");
+  // 길 위의 급경사 (출발·도착 출입구 경사로는 제외)
+  const steep = r.links.filter((id) => !r.exempt.has(id))
+                       .map((id) => LINK_BY_ID[id].properties)
+                       .filter((p) => p.slp_cls === "기준초과");
   const steepLen = steep.reduce((a, p) => a + p.length, 0);
   const min = Math.max(1, Math.round(r.length / 0.8 / 60));
+
+  // 출입구 경사도 안내: 기준충족은 값만, 완화기준은 (완화기준), 기준초과는 (주의)
+  const rampLine = (label, entId) => {
+    const deg = RAMP_DEG[entId];
+    const c = rampClass(deg);
+    if (!c) return `${label} 출입구 경사도 : 미측정`;
+    const txt = `${label} 출입구 경사도 : ${deg.toFixed(1)}°`;
+    if (c[0] === "기준초과") return `<span class="rp-warn">${txt} (주의)</span>`;
+    if (c[0] === "완화기준") return `<span class="rp-caution">${txt} (완화기준)</span>`;
+    return txt;
+  };
+
   rpResult.innerHTML = `거리 <b>${Math.round(r.length)}m</b>, 약 <b>${min}분</b><br>` +
     (steep.length
       ? `<span class="rp-warn">급경사를 피할 수 없는 경로입니다<br>급경사 구간 ${steep.length}곳 (${Math.round(steepLen)}m)</span>`
-      : "급경사 구간 없음");
+      : "급경사 구간 없음") +
+    `<div class="rp-ramp">${rampLine("출발", pickStart.id)}<br>${rampLine("도착", pickEnd.id)}</div>`;
 }
 
 function openRoute() {
@@ -759,7 +792,6 @@ function openRoute() {
   pickLayer.addTo(map);
   pinLayer.addTo(map);
   render();
-  /*fitCampus(routePanel);*/   // 출입구 동그라미가 팝업에 가리지 않게 캠퍼스를 팝업 위쪽에 맞춤
 }
 function closeRoute() {
   map.getContainer().classList.remove("route-mode");
