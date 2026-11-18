@@ -791,6 +791,7 @@ function openRoute() {
   routePanel.classList.add("open");
   pickLayer.addTo(map);
   pinLayer.addTo(map);
+  fitCampus(routePanel);   // 출입구 동그라미가 팝업에 가리지 않게 캠퍼스를 팝업 위쪽에 맞춤
   render();
 }
 function closeRoute() {
