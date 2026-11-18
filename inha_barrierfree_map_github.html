@@ -797,7 +797,7 @@ function render() {
                        .map((id) => LINK_BY_ID[id].properties)
                        .filter((p) => p.slp_cls === "기준초과");
   const steepLen = steep.reduce((a, p) => a + p.length, 0);
-  const min = Math.max(1, Math.round(r.length / 0.8 / 60));
+  const min = Math.max(1, Math.round(r.length / 0.73 / 60));
 
   // 출입구 경사도 안내: 기준충족은 값만, 완화기준은 (완화기준), 기준초과는 (주의)
   const rampLine = (label, entId) => {
