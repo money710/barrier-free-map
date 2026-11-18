@@ -12,8 +12,8 @@
 <script>
   // 브라우저가 예전 data.js를 기억하지 않도록 매번 새로 읽음
   document.write('<script src="data.js?v=' + Date.now() + '"><\/script>');
+  document.write('<script src="network.js?v=' + Date.now() + '"><\/script>');
 </script>
-<script src="network.js"></script>
 <style>
   :root {
     --inha: #1C4A86;      /* 인하 블루 */
@@ -239,6 +239,28 @@ const ENT = { yes: ["휠체어 진입 가능", "#1F8A5B"], limited: ["제한적"
 // 지도 위 점 크기 (휴대폰에서는 작게)
 const DOT_R = window.matchMedia("(max-width: 560px)").matches ? 7 : 10;
 // 출입문 종류별 색 (길 경사 등급의 초록·노랑·빨강과 겹치지 않게)
+// 출입구 경사로 실측 경사도 (network.js의 출입구 데이터에서 가져옴)
+const RAMP_DEG = {};
+NET_ENTRANCES.features.forEach((f) => {
+  const v = parseFloat(f.properties.ramp_deg);
+  if (!isNaN(v)) RAMP_DEG[f.properties.entranceID] = v;
+});
+// 경사로 기준 (편의증진법: 1/12 이하 기준충족, 1/8 이하 완화기준)
+function rampClass(deg) {
+  if (deg == null) return null;
+  if (deg <= 4.76) return ["기준충족", "#2E9E4F", "#fff"];
+  if (deg <= 7.13) return ["완화기준", "#F2A900", "#1E2530"];
+  return ["기준초과", "#D7301F", "#fff"];
+}
+function rampRow(entId, fallback) {
+  const v = parseFloat(fallback);
+  const deg = RAMP_DEG[entId] ?? (isNaN(v) ? null : v);
+  const c = rampClass(deg);
+  return c
+    ? `${deg.toFixed(1)}° <span class="badge" style="background:${c[1]};color:${c[2]}">${c[0]}</span>`
+    : "미측정";
+}
+
 const DOOR_COLORS = {
   automatic: "#29B6F6",  // 자동문: 하늘색
   hinged:    "#EC4899",  // 여닫이: 핑크
@@ -368,13 +390,13 @@ const entLayer = L.geoJSON(okEntrances, {
     const p = f.properties;
     const [label, color] = ENT[p.wheelchair] || ["미조사", "#8D96A3"];
     const bname = B[p.entrance_id.split("-")[0]]?.p.name || B[p.building_id]?.p.name || "";
-    layer.bindTooltip(esc(p.name || p.entrance_id));
     layer.bindPopup(`
       <div class="pop-head">${esc(p.name || p.entrance_id)}<small>${esc(bname)} ${floorName(p.floor)} 연결</small></div>
       <div class="pop-body"><dl>
         <dt>휠체어</dt><dd><span class="badge" style="background:${color}">${label}</span></dd>
         <dt>출입문</dt><dd><span class="badge" style="background:${DOOR_COLORS[doorKey(p)]}">${DOOR[p.door_type] ?? "미조사"}</span></dd>
         <dt>경사로</dt><dd>${HAS[p.ramp] ?? "미조사"}</dd>
+        <dt>경사도</dt><dd>${rampRow(p.entrance_id, p.ramp_degree)}</dd>
       </dl>${p.note ? `<p style="margin:8px 0 0">${esc(p.note)}</p>` : ""}</div>`,
       { autoPanPaddingTopLeft: [20, 180], autoPanPaddingBottomRight: [70, 260] });
   },
@@ -451,14 +473,7 @@ btnWc.onclick = () => {
 };
 
 // ===== 보행 네트워크: 경사 등급별 표시 =====
-const SLOPE_COLORS = {
-  '기준충족': '#2E9E4F',
-  '완화기준': '#F2A900',
-  '기준초과': '#D7301F',
-  '정보없음': '#9AA0A6'
-};
-
-// ===== 경사 등급 값 맞추기 (영어 값·공백이 있어도 한글 등급으로 통일) =====
+// 경사 등급 값 맞추기 (영어 값·공백이 있어도 한글 등급으로 통일)
 const CLS_MAP = {
   "Meets standard": "기준충족",
   "Relaxed standard": "완화기준",
@@ -469,6 +484,13 @@ NET_LINKS.features.forEach((f) => {
   const c = (f.properties.slp_cls ?? "").toString().trim();
   f.properties.slp_cls = CLS_MAP[c] || c || "정보없음";
 });
+
+const SLOPE_COLORS = {
+  '기준충족': '#2E9E4F',
+  '완화기준': '#F2A900',
+  '기준초과': '#D7301F',
+  '정보없음': '#9AA0A6'
+};
 
 const slopeLayer = L.geoJSON(NET_LINKS, {
   style: f => ({
@@ -643,7 +665,6 @@ NET_ENTRANCES.features.forEach((f) => {
   const m = L.circleMarker([lat, lng], {
     pane: "routePick", radius: DOT_R, color: "#1C4A86", weight: DOT_R > 8 ? 3.5 : 2.5, fillColor: "#fff", fillOpacity: 1, className: "pick-dot",
   });
-  m.bindTooltip(esc(entLabel(id)), { direction: "top", offset: [0, -8] });
   m.on("click", () => choose(id, [lat, lng]));
   pickLayer.addLayer(m);
 });
