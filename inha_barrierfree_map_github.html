@@ -171,9 +171,19 @@
   .rp-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: calc(var(--ui) * 8px); }
   .rp-title { font-weight: 700; color: var(--inha); font-size: calc(var(--ui) * 15px); }
   .rp-close { border: 0; background: none; font-size: calc(var(--ui) * 20px); cursor: pointer; line-height: 1; color: var(--muted); }
-  .rp-sel { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: calc(var(--ui) * 6px) calc(var(--ui) * 8px); align-items: center; }
-  .rp-sel dd { margin: 0; font-weight: 600; word-break: keep-all; }
-  .rp-sel dd.empty { color: var(--muted); font-weight: 500; }
+  .rp-sel { display: grid; grid-template-columns: auto max-content 1fr; gap: calc(var(--ui) * 6px) calc(var(--ui) * 8px); align-items: center; }
+  .rp-sel .rp-val { font-weight: 600; word-break: keep-all; }
+  .rp-sel .rp-val.empty { color: var(--muted); font-weight: 500; }
+  /* 출발·도착 바꾸기: 위아래 화살표 버튼 (두 줄에 걸쳐) */
+  .rp-swap {
+    grid-row: 1 / span 2; align-self: stretch; width: calc(var(--ui) * 30px);
+    display: flex; align-items: center; justify-content: center; padding: calc(var(--ui) * 4px) 0;
+    border: 1.5px solid var(--inha); border-radius: 8px; background: #fff; color: var(--inha); cursor: pointer;
+  }
+  .rp-swap svg { width: calc(var(--ui) * 12px); height: calc(var(--ui) * 26px); }
+  .rp-swap:hover:not(:disabled) { background: #EEF3FA; }
+  .rp-swap:disabled { opacity: .35; cursor: default; }
+  .rp-swap:focus-visible { outline: 3px solid var(--flash); outline-offset: 2px; }
   #rp-result { margin-top: calc(var(--ui) * 8px); padding-top: calc(var(--ui) * 8px); border-top: 1px solid var(--line); }
   .rp-warn { color: #D7301F; font-weight: 600; }
   .rp-caution { color: #B7791F; font-weight: 600; }
@@ -676,15 +686,32 @@ const pinLayer = L.layerGroup();    // 출발·도착 표시
 let pickStart = null, pickEnd = null;
 const entLabel = (id) => ENT_LABELS[id] || id;
 
+const PICK_MARKERS = {};   // 출입구 ID → 길찾기 동그라미
 NET_ENTRANCES.features.forEach((f) => {
   const id = f.properties.entranceID;
-  const [lng, lat] = f.geometry.coordinates;
+  const g = f.geometry;
+  const [lng, lat] = g.type === "MultiPoint" ? g.coordinates[0] : g.coordinates;
   const m = L.circleMarker([lat, lng], {
     pane: "routePick", radius: DOT_R, color: "#1C4A86", weight: DOT_R > 8 ? 3.5 : 2.5, fillColor: "#fff", fillOpacity: 1, className: "pick-dot",
   });
+  m.bindTooltip(esc(entLabel(id)), { direction: "top", offset: [0, -8] });   // 길찾기에서만 출입구 이름 표시
   m.on("click", () => choose(id, [lat, lng]));
+  PICK_MARKERS[id] = m;
   pickLayer.addLayer(m);
 });
+
+// 길찾기 동그라미 보이기: ids를 주면 그 출입구만, 없으면 전부
+function showPicks(ids) {
+  pickLayer.clearLayers();
+  Object.entries(PICK_MARKERS).forEach(([id, m]) => {
+    if (!ids || ids.includes(id)) pickLayer.addLayer(m);
+  });
+}
+
+// 같은 건물 출입구끼리 경로 추천을 허용하는 건물 (출입구 ID 앞부분 기준)
+const SAME_BLDG_OK = new Set(["B05", "B07"]);   // 5호관, 학생회관(비룡플라자)
+const bldOf = (id) => id.split("-")[0];
+let notice = "";   // 패널에 잠깐 띄울 안내 문구
 
 const routePanel = document.createElement("div");
 routePanel.id = "route-panel";
@@ -696,13 +723,15 @@ routePanel.innerHTML = `
     <span class="rp-title">휠체어 경로 찾기</span>
     <button type="button" class="rp-close" aria-label="길찾기 닫기">×</button>
   </div>
-  <dl class="rp-sel">
-    <dt><span class="pin pin-start">출발</span></dt><dd id="rp-start"></dd>
-    <dt><span class="pin pin-end">도착</span></dt><dd id="rp-end"></dd>
-  </dl>
+  <div class="rp-sel">
+    <button type="button" id="rp-swap" class="rp-swap" aria-label="출발·도착 바꾸기" title="출발·도착 바꾸기">
+      <svg viewBox="0 0 24 48" aria-hidden="true"><path d="M12 3 L4 13 H9 V35 H4 L12 45 L20 35 H15 V13 H20 Z" fill="currentColor"/></svg>
+    </button>
+    <span class="pin pin-start">출발</span><span class="rp-val" id="rp-start"></span>
+    <span class="pin pin-end">도착</span><span class="rp-val" id="rp-end"></span>
+  </div>
   <div id="rp-result" aria-live="polite"></div>
   <div class="rp-actions">
-    <button type="button" id="rp-swap">출발·도착 바꾸기</button>
     <button type="button" id="rp-reset">다시 선택</button>
   </div>`;
 document.body.appendChild(routePanel);
@@ -727,10 +756,13 @@ function clearRoute() {
 
 // 출입구를 누를 때: 출발 → 도착 순서. 둘 다 정해진 뒤 다시 누르면 새 출발지로 시작
 function choose(id, ll) {
+  notice = "";
   if (!pickStart || pickEnd) {
     pickStart = { id, ll }; pickEnd = null; clearRoute();
   } else if (id === pickStart.id) {
     return;
+  } else if (bldOf(id) === bldOf(pickStart.id) && !SAME_BLDG_OK.has(bldOf(id))) {
+    notice = "5호관과 비룡플라자를 제외한 동일 건물 간의 경로 추천은 불가합니다.";
   } else {
     pickEnd = { id, ll };
   }
@@ -750,12 +782,15 @@ function render() {
   rpReset.disabled = !pickStart;
 
   if (!pickStart || !pickEnd) {
+    showPicks(null);   // 고르는 중에는 출입구 전부 표시
+    if (notice) { rpResult.innerHTML = `<span class="rp-warn">${notice}</span>`; return; }
     rpResult.textContent = pickStart ? "도착할 출입구를 지도에서 누르세요." : "출발할 출입구를 지도에서 누르세요.";
     return;
   }
 
   const r = drawRoute(pickStart.id, pickEnd.id);
-  if (!r) { rpResult.textContent = "휠체어로 이동할 수 있는 경로가 없습니다. 다른 출입구를 골라 보세요."; return; }
+  if (!r) { showPicks(null); rpResult.textContent = "휠체어로 이동할 수 있는 경로가 없습니다. 다른 출입구를 골라 보세요."; return; }
+  showPicks([pickStart.id, pickEnd.id]);   // 경로가 나오면 출발·도착 출입구만 남김
 
   // 길 위의 급경사 (출발·도착 출입구 경사로는 제외)
   const steep = r.links.filter((id) => !r.exempt.has(id))
@@ -791,11 +826,12 @@ function openRoute() {
   routePanel.classList.add("open");
   pickLayer.addTo(map);
   pinLayer.addTo(map);
-  fitCampus(routePanel);   // 출입구 동그라미가 팝업에 가리지 않게 캠퍼스를 팝업 위쪽에 맞춤
   render();
 }
 function closeRoute() {
   map.getContainer().classList.remove("route-mode");
+  notice = "";
+  showPicks(null);
   btnRoute.setAttribute("aria-pressed", "false");
   routePanel.classList.remove("open");
   pickStart = pickEnd = null;
@@ -810,7 +846,7 @@ btnRoute.addEventListener("click", () => {
 });
 routePanel.querySelector(".rp-close").addEventListener("click", closeRoute);
 rpSwap.addEventListener("click", () => { [pickStart, pickEnd] = [pickEnd, pickStart]; render(); });
-rpReset.addEventListener("click", () => { pickStart = pickEnd = null; clearRoute(); render(); });
+rpReset.addEventListener("click", () => { pickStart = pickEnd = null; notice = ""; clearRoute(); render(); });
 
 // ===== 메뉴바 높이 (지도 표기·경로 화면 맞춤에 사용) =====
 const dockEl = document.querySelector(".dock");
