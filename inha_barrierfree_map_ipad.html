@@ -1,0 +1,924 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- 아이패드 에어 11인치용 (2360×1640 = 화면 1180×820, 가로·세로 모두 대응) -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>인하대 배리어프리맵</title>
+<!-- 지도 라이브러리(Leaflet)와 글꼴(Pretendard) -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<!-- convert.py가 만든 데이터 파일 (엑셀을 고치면 이 파일만 교체) -->
+<script>
+  // 브라우저가 예전 data.js를 기억하지 않도록 매번 새로 읽음
+  document.write('<script src="data.js?v=' + Date.now() + '"><\/script>');
+  document.write('<script src="network.js?v=' + Date.now() + '"><\/script>');
+</script>
+<style>
+  :root {
+    --inha: #1C4A86;      /* 인하 블루 */
+    --ink: #1E2530;
+    --muted: #6B7685;
+    --line: #E3E7EC;
+    --flash: #FFD400;     /* 반짝이는 경계 (PPT의 노란 테두리) */
+    --ok: #1F8A5B;        /* 휠체어 진입 가능 */
+    --limited: #C98A00;   /* 제한적 */
+    --warn: #C8372D;      /* 주의사항 */
+    /* ===== 화면 크기 배율: 글씨·버튼·팝업이 작거나 크면 이 숫자만 바꾸세요 (1 = 기본) ===== */
+    --ui: 1.35;   /* 아이패드 배율: 가로 1180×820 기준 (키우려면 숫자를 올리기) */
+    /* 오른쪽 위 확대·축소, 배경지도 버튼 크기 배율 */
+    --ctrl: 1.8;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; font-family: Pretendard, "Malgun Gothic", sans-serif; color: var(--ink); }
+  #map { position: fixed; inset: 0; background: #2b2f33; }
+
+  /* 좌상단 제목 */
+  .title {
+    position: fixed; z-index: 1000; left: 14px; top: calc(14px + env(safe-area-inset-top, 0px));
+    background: var(--inha); color: #fff; padding: calc(var(--ui) * 9px) calc(var(--ui) * 14px); border-radius: 10px;
+    font-weight: 700; font-size: calc(var(--ui) * 17px); letter-spacing: -0.02em; box-shadow: 0 2px 8px rgba(0,0,0,.3);
+  }
+
+  /* 하단 메뉴바: 버튼 3개를 나란히 */
+  .dock {
+    position: fixed; z-index: 1000; left: 0; right: 0; bottom: 0;
+    display: flex; justify-content: center; gap: calc(var(--ui) * 10px);
+    padding: calc(var(--ui) * 8px) calc(var(--ui) * 12px) calc(var(--ui) * 8px + env(safe-area-inset-bottom, 0px));
+    background: rgba(255,255,255,.97); box-shadow: 0 -3px 14px rgba(0,0,0,.28);
+    border-top: 3px solid var(--inha);
+  }
+  .dock > button {
+    flex: 1 1 0; min-width: 0; max-width: calc(var(--ui) * 190px);
+    padding: calc(var(--ui) * 9px) calc(var(--ui) * 10px); border-radius: 12px;
+    border: 2px solid var(--inha); background: #fff; color: var(--inha);
+    font: 700 calc(var(--ui) * 15px)/1.25 Pretendard, "Malgun Gothic", sans-serif; cursor: pointer; word-break: keep-all;
+  }
+  .dock > button[aria-pressed="true"] { background: var(--inha); color: #fff; }
+  .dock > button:focus-visible { outline: 3px solid var(--flash); outline-offset: 2px; }
+  /* 지도 오른쪽 아래 표기(출처)가 메뉴바에 가리지 않게 */
+  .leaflet-bottom { bottom: var(--dock-h, 0px); }
+
+  /* 범례: 메뉴바 위, 화면 가운데 (버튼 켰을 때만). 둘 다 켜면 위아래로 쌓임 */
+  .legends {
+    position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(100% + var(--ui) * 10px);
+    display: flex; flex-direction: column; align-items: center; gap: calc(var(--ui) * 6px);
+    width: max-content; max-width: calc(100vw - 28px); pointer-events: none;
+  }
+  .legends .legend { pointer-events: auto; }
+  /* 길 경사 등급 범례 항목 (누르는 버튼 아님) */
+  .legend .item {
+    display: flex; align-items: center; gap: 6px; white-space: nowrap;
+    padding: calc(var(--ui) * 4px) calc(var(--ui) * 6px); font: 600 calc(var(--ui) * 14px) Pretendard, "Malgun Gothic", sans-serif; color: var(--ink);
+  }
+  .legend .item .bar { width: calc(var(--ui) * 22px); height: calc(var(--ui) * 5px); border-radius: 3px; display: inline-block; }
+  .legend {
+    display: none; flex-direction: row; flex-wrap: wrap; align-items: center; gap: calc(var(--ui) * 6px);
+    width: max-content; max-width: calc(100vw - 28px); justify-content: center; padding: calc(var(--ui) * 6px) calc(var(--ui) * 8px);
+    background: rgba(255,255,255,.97); border-radius: 12px; box-shadow: 0 3px 10px rgba(0,0,0,.3);
+  }
+  .legend.on { display: flex; }
+  .legend .legend-title { font: 700 calc(var(--ui) * 13px) Pretendard, "Malgun Gothic", sans-serif; color: var(--muted); padding: 0 calc(var(--ui) * 4px); white-space: nowrap; }
+  /* 문 종류 선택 버튼 (누르면 켜고 끔) */
+  .legend .chip {
+    display: flex; align-items: center; gap: 8px; white-space: nowrap; cursor: pointer; text-align: left;
+    border: 1.5px solid var(--line); background: #fff; color: var(--ink); border-radius: 8px;
+    padding: calc(var(--ui) * 5px) calc(var(--ui) * 10px); font: 600 calc(var(--ui) * 14px) Pretendard, "Malgun Gothic", sans-serif;
+  }
+  .legend .chip > span { color: var(--ink); }
+  .legend .chip[aria-pressed="true"] { border-color: currentColor; }
+  .legend .chip[aria-pressed="false"] { color: var(--muted); background: #F3F4F6; }
+  .legend .chip[aria-pressed="false"] .dot { background: #C4C9D0 !important; }
+  .legend .chip[aria-pressed="false"] > span { color: var(--muted); text-decoration: line-through; }
+  .legend .chip:focus-visible { outline: 3px solid var(--flash); outline-offset: 2px; }
+  .legend .chip small { font-weight: 500; color: var(--muted); }
+  /* 배리어프리 시설 선택 버튼: 하나만 고르는 방식 (안 고른 상태도 흐리게 하지 않음) */
+  .legend .chip.fac-chip[aria-pressed="false"] { color: var(--line); background: #fff; }
+  .legend .chip.fac-chip[aria-pressed="false"] > span { color: var(--ink); text-decoration: none; }
+  .legend .chip.fac-chip .dot { background: var(--c) !important; }
+  .legend .chip.fac-chip[aria-pressed="true"] { color: var(--c); box-shadow: inset 0 0 0 1.5px var(--c); background: #fff; }
+  .dot { width: calc(var(--ui) * 12px); height: calc(var(--ui) * 12px); border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.3); }
+
+  /* 안내 메시지 */
+  .toast {
+    max-width: calc(100% - 32px); text-align: center; line-height: 1.45;
+    position: fixed; z-index: 1001; left: 50%; top: calc(16px + env(safe-area-inset-top, 0px));
+    transform: translate(-50%, -12px); opacity: 0; pointer-events: none;
+    background: var(--ink); color: #fff; padding: calc(var(--ui) * 10px) calc(var(--ui) * 16px); border-radius: 10px; font-size: calc(var(--ui) * 15px);
+    transition: opacity .2s, transform .2s;
+  }
+  .toast.on { opacity: 1; transform: translate(-50%, 0); }
+
+  /* 건물 외곽선: 평소엔 보이지 않고, 클릭·화장실 버튼으로 lit 될 때만 표시 */
+  .bld-shape { cursor: pointer; }
+  .bld-shape.lit { stroke: var(--flash); stroke-opacity: 1; stroke-width: 4px; fill: var(--flash); fill-opacity: .12; }
+  /* 외곽선(WKT)이 없는 건물은 이름표로 표시 */
+  .bld-tag {
+    background: rgba(28,74,134,.92); color: #fff; border-radius: 6px; padding: 3px 8px;
+    font: 600 calc(var(--ui) * 13px) Pretendard, sans-serif; white-space: nowrap; cursor: pointer;
+    box-shadow: 0 1px 3px rgba(0,0,0,.35); transform: translate(-50%, -50%); display: inline-block;
+    border: 2px solid transparent;
+  }
+  .bld-tag.lit { border-color: var(--flash); background: var(--ink); }
+
+  /* 반짝임: 건물 경계 2번, 천천히·은은하게 */
+  @keyframes flash-shape { 0%,100% { stroke-opacity: 1; } 50% { stroke-opacity: .45; } }
+  @keyframes flash-tag   { 0%,100% { box-shadow: 0 0 0 0 var(--flash); } 50% { box-shadow: 0 0 0 3px var(--flash); } }
+  @keyframes flash-dot   { 0%,100% { opacity: 1; } 50% { opacity: .5; } }   /* 흐려지는 정도: .5 (1에 가까울수록 약하게) */
+  .bld-shape.blink { animation: flash-shape 1.2s ease-in-out 2; }   /* 속도(1.2s) · 횟수(2) */
+  .bld-tag.blink   { animation: flash-tag 1.2s ease-in-out 2; }
+  .ent-dot.blink   { animation: none; }   /* 출입구 점 반짝임 끔 (켜려면: flash-dot 1.2s ease-in-out 1) */
+  @media (prefers-reduced-motion: reduce) {
+    .bld-shape.blink, .bld-tag.blink, .ent-dot.blink { animation: none; }
+  }
+
+  /* 팝업 */
+  .leaflet-popup-content-wrapper { border-radius: 12px; padding: 0; overflow: hidden; }
+  .leaflet-popup-content { margin: 0; width: min(calc(var(--ui) * 330px), 88vw) !important; font-family: Pretendard, "Malgun Gothic", sans-serif; }
+  .pop-head { background: var(--inha); color: #fff; padding: calc(var(--ui) * 11px) calc(var(--ui) * 40px) calc(var(--ui) * 11px) calc(var(--ui) * 16px); font-size: calc(var(--ui) * 17px); font-weight: 700; }
+  .pop-head small { display: block; font-weight: 500; font-size: calc(var(--ui) * 13px); opacity: .85; margin-top: 2px; }
+  /* 화장실 목록이 길면 팝업 안에서 스크롤 */
+  .pop-body { padding: calc(var(--ui) * 11px) calc(var(--ui) * 16px) calc(var(--ui) * 13px); font-size: calc(var(--ui) * 14.5px); line-height: 1.55; max-height: 55vh; overflow-y: auto; }
+  .pop-body dl { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: calc(var(--ui) * 6px) calc(var(--ui) * 12px); word-break: keep-all; }
+  .pop-body dt { color: var(--muted); white-space: nowrap; }
+  .pop-body dd { margin: 0; }
+  .pop-body ul { margin: 0; padding-left: 16px; }
+  .caution { margin: 10px 0 0; color: var(--warn); font-weight: 600; }
+  .badge { display: inline-block; padding: 1px 9px; border-radius: 999px; font-size: calc(var(--ui) * 13px); font-weight: 600; color: #fff; }
+  .leaflet-container a.leaflet-popup-close-button { color: #fff; width: calc(var(--ui) * 30px); height: calc(var(--ui) * 30px); font: calc(var(--ui) * 22px)/calc(var(--ui) * 30px) Tahoma, sans-serif; top: calc(var(--ui) * 6px); right: calc(var(--ui) * 6px); }
+  /* 확대·축소, 배경지도 버튼도 같이 키움 */
+  .leaflet-touch .leaflet-bar a, .leaflet-bar a { width: calc(var(--ctrl) * 30px); height: calc(var(--ctrl) * 30px); line-height: calc(var(--ctrl) * 30px); font-size: calc(var(--ctrl) * 20px); }
+  .leaflet-touch .leaflet-control-layers-toggle, .leaflet-control-layers-toggle { width: calc(var(--ctrl) * 34px) !important; height: calc(var(--ctrl) * 34px) !important; background-size: calc(var(--ctrl) * 20px); }
+  .leaflet-control-layers-expanded { font-size: calc(var(--ctrl) * 13px); padding: 10px 16px; line-height: 1.9; }
+  .leaflet-control-layers-selector { width: calc(var(--ctrl) * 11px); height: calc(var(--ctrl) * 11px); margin-right: 6px; vertical-align: -2px; }
+
+  /* data.js 없음 */
+  .err { position: fixed; z-index: 1002; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,.55); }
+  .err div { background: #fff; max-width: 420px; padding: 20px 22px; border-radius: 10px; line-height: 1.6; }
+  .err h2 { margin: 0 0 8px; font-size: 17px; color: var(--warn); }
+
+  @media (max-width: 560px) {
+    :root { --ui: 0.95; --ctrl: 1.2; }   /* 휴대폰 배율 (크거나 작으면 이 숫자 조절) */
+    .dock { gap: 6px; padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px)); }
+    .dock > button { max-width: none; font-size: 13px; padding: 8px 3px; }
+  }
+
+  /* 길찾기 패널: 제목 아래 왼쪽 위 (지도를 가리지 않게) */
+  .route-panel {
+    display: none;
+    position: fixed; z-index: 1100; left: 50%; transform: translateX(-50%);
+    bottom: calc(var(--dock-h, 0px) + var(--ui) * 10px);   /* 범례와 같은 자리: 메뉴바 위 가운데 */
+    width: calc(var(--ui) * 270px); max-width: calc(100vw - 28px);
+    background: #fff; border-radius: 12px; padding: calc(var(--ui) * 10px) calc(var(--ui) * 12px);
+    box-shadow: 0 3px 12px rgba(0,0,0,.3); font-size: calc(var(--ui) * 13.5px); line-height: 1.45;
+  }
+  .route-panel.open { display: block; }
+  .rp-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: calc(var(--ui) * 8px); }
+  .rp-title { font-weight: 700; color: var(--inha); font-size: calc(var(--ui) * 15px); }
+  .rp-close { border: 0; background: none; font-size: calc(var(--ui) * 20px); cursor: pointer; line-height: 1; color: var(--muted); }
+  .rp-sel { display: grid; grid-template-columns: auto max-content 1fr; gap: calc(var(--ui) * 6px) calc(var(--ui) * 8px); align-items: center; }
+  .rp-sel .rp-val { font-weight: 600; word-break: keep-all; }
+  .rp-sel .rp-val.empty { color: var(--muted); font-weight: 500; }
+  /* 출발·도착 바꾸기: 위아래 화살표 버튼 (두 줄에 걸쳐) */
+  .rp-swap {
+    grid-row: 1 / span 2; align-self: stretch; width: calc(var(--ui) * 30px);
+    display: flex; align-items: center; justify-content: center; padding: calc(var(--ui) * 4px) 0;
+    border: 1.5px solid var(--inha); border-radius: 8px; background: #fff; color: var(--inha); cursor: pointer;
+  }
+  .rp-swap svg { width: calc(var(--ui) * 12px); height: calc(var(--ui) * 26px); }
+  .rp-swap:hover:not(:disabled) { background: #EEF3FA; }
+  .rp-swap:disabled { opacity: .35; cursor: default; }
+  .rp-swap:focus-visible { outline: 3px solid var(--flash); outline-offset: 2px; }
+  #rp-result { margin-top: calc(var(--ui) * 8px); padding-top: calc(var(--ui) * 8px); border-top: 1px solid var(--line); }
+  .rp-warn { color: #D7301F; font-weight: 600; }
+  .rp-caution { color: #B7791F; font-weight: 600; }
+  .rp-ramp { margin-top: calc(var(--ui) * 6px); padding-top: calc(var(--ui) * 6px); border-top: 1px dashed var(--line); }
+  .rp-actions { display: flex; gap: 6px; margin-top: calc(var(--ui) * 8px); }
+  .rp-actions button {
+    flex: 1; border: 1.5px solid var(--inha); background: #fff; color: var(--inha); border-radius: 8px;
+    padding: calc(var(--ui) * 5px); font: 600 calc(var(--ui) * 12.5px) Pretendard, "Malgun Gothic", sans-serif; cursor: pointer;
+  }
+  .rp-actions button:disabled { opacity: .4; cursor: default; }
+  .rp-actions button:focus-visible, .rp-close:focus-visible { outline: 3px solid var(--flash); outline-offset: 2px; }
+  /* 출발·도착 표시 */
+  .pin {
+    display: inline-block; padding: 2px calc(var(--ui) * 8px); border-radius: 999px; color: #fff; white-space: nowrap;
+    font: 700 calc(var(--ui) * 12px)/1.5 Pretendard, "Malgun Gothic", sans-serif; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.4);
+  }
+  .pin-start { background: var(--inha); }
+  .pin-end { background: var(--ink); }
+  .map-pin { transform: translate(-50%, calc(-100% - 6px)); display: inline-block; }
+  .pick-dot { cursor: pointer; }
+  /* 길찾기 중에는 건물을 눌러도 반응하지 않음 */
+  .route-mode .bld-shape, .route-mode .bld-icon { pointer-events: none !important; }
+  @media (max-width: 560px) {
+  }
+  /* 아이패드 세로(820×1180): 조금 작게 */
+  @media (min-width: 561px) and (max-width: 900px) and (orientation: portrait) {
+    :root { --ui: 1.2; }
+  }
+  /* 터치: 두 번 탭 확대 방지, 버튼 누름 반응 */
+  button, .chip, .pick-dot { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+  .dock > button:active, .legend .chip:active, .rp-swap:active, .rp-actions button:active { transform: scale(.97); }
+</style>
+</head>
+<body>
+<div id="map" role="application" aria-label="인하대학교 용현캠퍼스 지도"></div>
+<div class="title">인하대 배리어프리맵</div>
+
+
+<nav class="dock" aria-label="지도 기능">
+  <div class="legends">
+    <div class="legend" id="slope-legend" role="group" aria-label="길 경사 등급 범례">
+      <div class="legend-title">길 경사 등급</div>
+    </div>
+    <div class="legend" id="fac-legend" role="group" aria-label="배리어프리 시설 선택">
+      <div class="legend-title">배리어프리 시설</div>
+    </div>
+    <div class="legend" id="legend" role="group" aria-label="출입문 종류 선택">
+      <div class="legend-title">출입문 종류</div>
+    </div>
+  </div>
+  <button id="btn-ent" aria-pressed="false">진입 가능<br>출입구</button>
+  <button id="btn-route" aria-pressed="false">길찾기</button>
+  <button id="btn-wc" aria-pressed="false">배리어프리<br>시설 정보</button>
+  <button id="btn-slope" aria-pressed="false">길 경사<br>등급</button>
+</nav>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+// data.js를 못 불러왔을 때 안내
+if (typeof BF_DATA === "undefined") {
+  document.body.insertAdjacentHTML("beforeend",
+    '<div class="err"><div><h2>데이터 파일을 찾지 못했습니다</h2>' +
+    'index.html과 같은 폴더에 data.js가 있는지 확인하세요. ' +
+    '다운로드하면서 data (1).js처럼 이름이 바뀌었을 수 있습니다.</div></div>');
+  throw new Error("data.js 없음");
+}
+
+// ---------- 1. 코드값 → 한글 ----------
+const HAS = { yes: "있음", no: "없음", unknown: "미조사", "n/a": "해당없음" };
+const DOOR = { automatic: "자동문", hinged: "여닫이", sliding: "미닫이", revolving: "회전문", no: "문 없음", unknown: "미조사" };
+const WC_TYPE = { unisex: "남녀공용", male: "남", female: "여", unknown: "" };
+const WC_STATE = { in_service: "", broken: "고장", locked: "잠김", unknown: "" };
+const ENT = { yes: ["휠체어 진입 가능", "#1F8A5B"], limited: ["제한적", "#C98A00"] };
+// 지도 위 점 크기 (휴대폰에서는 작게)
+const DOT_R = window.matchMedia("(max-width: 560px)").matches ? 7 : 10;
+// 출입문 종류별 색 (길 경사 등급의 초록·노랑·빨강과 겹치지 않게)
+// 출입구 경사로 실측 경사도 (network.js의 출입구 데이터에서 가져옴)
+const RAMP_DEG = {};
+NET_ENTRANCES.features.forEach((f) => {
+  const v = parseFloat(f.properties.ramp_deg);
+  if (!isNaN(v)) RAMP_DEG[f.properties.entranceID] = v;
+});
+// 경사로 기준 (편의증진법: 1/12 이하 기준충족, 1/8 이하 완화기준)
+function rampClass(deg) {
+  if (deg == null) return null;
+  if (deg <= 4.76) return ["기준충족", "#2E9E4F", "#fff"];
+  if (deg <= 7.13) return ["완화기준", "#F2A900", "#1E2530"];
+  return ["기준초과", "#D7301F", "#fff"];
+}
+function rampRow(entId, fallback) {
+  const v = parseFloat(fallback);
+  const deg = RAMP_DEG[entId] ?? (isNaN(v) ? null : v);
+  const c = rampClass(deg);
+  return c
+    ? `${deg.toFixed(1)}° <span class="badge" style="background:${c[1]};color:${c[2]}">${c[0]}</span>`
+    : "미측정";
+}
+
+const DOOR_COLORS = {
+  automatic: "#29B6F6",  // 자동문: 하늘색
+  hinged:    "#EC4899",  // 여닫이: 핑크
+  sliding:   "#8B5CF6",  // 미닫이: 보라
+  revolving: "#14B8A6",  // 회전문: 청록
+  no:        "#475569",  // 문 없음: 진회색
+  unknown:   "#9CA3AF",  // 미조사: 연회색
+};
+
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const blank = (v) => v === null || v === undefined || v === "" || v === "미조사";
+const floorName = (f) => f == null ? "" : (f < 0 ? `지하 ${-f}층` : `${f}층`);
+
+// ---------- 2. 지도 (인하대 고정) ----------
+const CAMPUS = L.latLngBounds([37.4460, 126.6480], [37.4555, 126.6625]);
+const map = L.map("map", {
+  maxBounds: CAMPUS.pad(1.0), maxBoundsViscosity: 1.0, minZoom: 15, maxZoom: 20, zoomControl: false,   /* 휴대폰처럼 좁은 화면에서도 캠퍼스 전체가 들어오게 */
+  zoomSnap: 0.25,   /* 처음 화면을 캠퍼스에 딱 맞게 */
+});
+
+// ===== 처음 화면: 캠퍼스 보행로 전체가 제목과 메뉴바 사이 가운데에 꽉 차게 =====
+// (아래 코드에서 혹시 오류가 나도 처음 화면은 맞춰지도록 지도 만든 직후에 실행)
+function fitCampus(bottomPanel) {
+  map.invalidateSize();
+  const titleBottom = document.querySelector(".title").getBoundingClientRect().bottom;
+  const dockH = bottomPanel
+    ? window.innerHeight - bottomPanel.getBoundingClientRect().top   // 아래 팝업까지 피해서 맞춤
+    : document.querySelector(".dock").getBoundingClientRect().height;
+  map.fitBounds(L.geoJSON(NET_LINKS).getBounds(), {
+    paddingTopLeft: [20, titleBottom + 10],
+    paddingBottomRight: [20, dockH + 10],
+    animate: false,
+  });
+}
+fitCampus();
+// 글꼴·화면 크기가 다 정해진 뒤 한 번 더 맞춤 (휴대폰 주소창 때문에 높이가 바뀌는 경우 대비)
+window.addEventListener("load", () => setTimeout(() => fitCampus(), 100));
+console.info("[배리어프리맵] 2026-11-16 버전");   // 휴대폰에 새 파일이 반영됐는지 확인용
+
+// 배경지도: Esri 위성영상 (인증키 필요 없음)
+L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
+  maxZoom: 20, maxNativeZoom: 19, attribution: "Imagery &copy; Esri",
+}).addTo(map);
+
+// 애니메이션을 처음부터 다시 재생
+function blink(el, cls = "blink") {
+  if (!el) return;
+  el.classList.remove(cls); void el.getBoundingClientRect(); el.classList.add(cls);
+}
+const toastEl = document.getElementById("toast");
+let toastTimer;
+function toast(msg, ms = 2200) {
+  toastEl.textContent = msg; toastEl.classList.add("on");
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => toastEl.classList.remove("on"), ms);
+}
+
+// ---------- 3. 건물 (클릭 → 경계 반짝 + 팝업) ----------
+const B = {};          // building_id → { p, layer, els(), center }
+let selected = null;   // 클릭으로 선택된 건물
+let wcOn = false;      // '배리어프리 시설 정보' 버튼 상태
+let facSel = null;     // 고른 시설 (wc / elev / park)
+// 배리어프리 시설: 이름, 색, 이 건물에 있는지 판단하는 방법
+const FACILITIES = {
+  wc:   { label: "장애인 화장실", color: "#29B6F6", has: (p) => p.restroom_count > 0 },          // 하늘
+  elev: { label: "엘리베이터",   color: "#EC4899", has: (p) => p.elevator === "yes" },          // 핑크
+  park: { label: "장애인 주차장", color: "#8B5CF6", has: (p) => p.parking === "yes" || p.parking_count > 0 },   // 보라
+};
+
+function buildingPopup(p) {
+  const wcs = p.restrooms || [];
+  const wcHtml = wcs.length
+    ? `<ul>${wcs.map((w) => {
+        const extra = [WC_TYPE[w.type], WC_STATE[w.available]].filter(Boolean).join(", ");
+        return `<li>${floorName(w.floor)} ${blank(w.location) ? "(위치 미조사)" : esc(w.location)}${extra ? ` <small>(${esc(extra)})</small>` : ""}</li>`;
+      }).join("")}</ul>`
+    : "없음";
+  let elev = HAS[p.elevator] ?? "미조사";
+  if (p.elevator === "yes") elev += blank(p.elevator_floors) ? " (운행층 미조사)" : ` (${esc(p.elevator_floors)})`;
+  return `
+    <div class="pop-head">${esc(p.name)}</div>
+    <div class="pop-body">
+      <dl>
+        <dt>장애인 화장실</dt><dd>${wcHtml}</dd>
+        <dt>엘리베이터</dt><dd>${elev}</dd>
+        <dt>장애인 주차장</dt><dd>${HAS[p.parking] ?? "미조사"}</dd>
+        <dt>출입구 경사로</dt><dd>${HAS[p.entrance_ramp] ?? "미조사"}</dd>
+      </dl>
+      ${p.caution ? `<p class="caution">* ${esc(p.caution)}</p>` : ""}
+    </div>`;
+}
+
+function setLit(id, on, color) {
+  B[id].els().forEach((el) => {
+    el.classList.toggle("lit", on);
+    if (color) el.style.setProperty("--flash", color); else el.style.removeProperty("--flash");
+  });
+}
+function refreshLit() {
+  for (const id in B) {
+    const fac = wcOn && facSel && FACILITIES[facSel].has(B[id].p);
+    // 클릭으로 고른 건물은 기본 노란색, 시설로 강조된 건물은 시설 색
+    setLit(id, id === selected || fac, id !== selected && fac ? FACILITIES[facSel].color : null);
+  }
+}
+
+BF_DATA.buildings.features.forEach((f) => {
+  const p = f.properties;
+  const center = p.center ? [p.center[1], p.center[0]] : null;
+  let layer, els;
+  if (f.geometry.type === "Point") {
+    const [lng, lat] = f.geometry.coordinates;
+    layer = L.marker([lat, lng], {
+      icon: L.divIcon({ className: "bld-icon", html: `<span class="bld-tag">${esc(p.name)}</span>`, iconSize: null }),
+      keyboard: true, title: p.name,
+    });
+    els = () => { const e = layer.getElement(); return e ? [e.querySelector(".bld-tag")] : []; };
+  } else {
+    layer = L.geoJSON(f, { style: { color: "#FFD400", weight: 4, opacity: 0, fillColor: "#FFD400", fillOpacity: 0, className: "bld-shape" }  /* 평소엔 투명(클릭만 됨) */ });
+    els = () => { const a = []; layer.eachLayer((l) => l.getElement() && a.push(l.getElement())); return a; };
+  }
+  layer.addTo(map).bindPopup(buildingPopup(p), { autoPanPaddingTopLeft: [20, 180], autoPanPaddingBottomRight: [70, 260] });
+  layer.on("click", () => {
+    selected = p.building_id; refreshLit();
+    els().forEach((el) => blink(el));
+  });
+  layer.on("popupclose", () => { if (selected === p.building_id) { selected = null; refreshLit(); } });
+  B[p.building_id] = { p, layer, els };
+});
+
+// ---------- 4. 버튼: 진입 가능 출입구 (문 종류별 색) ----------
+const doorKey = (p) => (p.door_type in DOOR_COLORS ? p.door_type : "unknown");
+const okEntrances = {
+  type: "FeatureCollection",
+  features: BF_DATA.entrances.features.filter((f) => f.properties.wheelchair === "yes"),
+};
+const entLayer = L.geoJSON(okEntrances, {
+  pointToLayer: (f, latlng) => L.circleMarker(latlng, {
+    radius: DOT_R, color: "#fff", weight: DOT_R > 8 ? 3 : 2, fillOpacity: 1, className: "ent-dot",
+    fillColor: DOOR_COLORS[doorKey(f.properties)],
+  }),
+  onEachFeature: (f, layer) => {
+    const p = f.properties;
+    const [label, color] = ENT[p.wheelchair] || ["미조사", "#8D96A3"];
+    const bname = B[p.entrance_id.split("-")[0]]?.p.name || B[p.building_id]?.p.name || "";
+    layer.bindPopup(`
+      <div class="pop-head">${esc(p.name || p.entrance_id)}<small>${esc(bname)} ${floorName(p.floor)} 연결</small></div>
+      <div class="pop-body"><dl>
+        <dt>휠체어</dt><dd><span class="badge" style="background:${color}">${label}</span></dd>
+        <dt>출입문</dt><dd><span class="badge" style="background:${DOOR_COLORS[doorKey(p)]}">${DOOR[p.door_type] ?? "미조사"}</span></dd>
+        <dt>경사로</dt><dd>${HAS[p.ramp] ?? "미조사"}</dd>
+        <dt>경사도</dt><dd>${rampRow(p.entrance_id, p.ramp_degree)}</dd>
+      </dl>${p.note ? `<p style="margin:8px 0 0">${esc(p.note)}</p>` : ""}</div>`,
+      { autoPanPaddingTopLeft: [20, 180], autoPanPaddingBottomRight: [70, 260] });
+  },
+});
+
+// 문 종류별로 묶기 (실제로 있는 종류만 범례에 표시)
+const entGroups = {};
+entLayer.eachLayer((l) => {
+  const k = doorKey(l.feature.properties);
+  (entGroups[k] ||= L.featureGroup()).addLayer(l);
+});
+
+const btnEnt = document.getElementById("btn-ent");
+const legend = document.getElementById("legend");
+Object.keys(DOOR_COLORS).filter((k) => entGroups[k]).forEach((k) => {
+  const c = document.createElement("button");
+  c.type = "button"; c.className = "chip"; c.dataset.kind = k;
+  c.setAttribute("aria-pressed", "true");
+  c.style.color = DOOR_COLORS[k];
+  c.innerHTML = `<i class="dot" style="background:${DOOR_COLORS[k]}"></i><span>${DOOR[k]}</span><small>${entGroups[k].getLayers().length}</small>`;
+  c.onclick = () => {
+    c.setAttribute("aria-pressed", c.getAttribute("aria-pressed") !== "true");
+    drawEntrances();
+  };
+  legend.appendChild(c);
+});
+const chips = legend.querySelectorAll(".chip");
+L.DomEvent.disableClickPropagation(legend);
+
+function drawEntrances() {
+  const on = btnEnt.getAttribute("aria-pressed") === "true";
+  chips.forEach((c) => {
+    const g = entGroups[c.dataset.kind];
+    if (on && c.getAttribute("aria-pressed") === "true") {
+      const wasOn = map.hasLayer(g);
+      g.addTo(map);
+      if (!wasOn) g.eachLayer((l) => blink(l.getElement()));   // 새로 켜진 종류만 한 번 반짝
+    } else {
+      map.removeLayer(g);
+    }
+  });
+}
+function setEnt(on) {
+  btnEnt.setAttribute("aria-pressed", on);
+  legend.classList.toggle("on", on);
+  drawEntrances();
+}
+btnEnt.onclick = () => {
+  const on = btnEnt.getAttribute("aria-pressed") !== "true";
+  if (on) offOthers("ent");
+  btnEnt.setAttribute("aria-pressed", on);
+  legend.classList.toggle("on", on);
+  drawEntrances();
+  if (on && !entLayer.getLayers().length) toast("아직 입력된 진입 가능 출입구가 없습니다");
+};
+
+// ---------- 5. 버튼: 배리어프리 시설 정보 (시설을 고르면 해당 건물 경계가 시설 색으로 반짝) ----------
+const btnWc = document.getElementById("btn-wc");
+const facLegend = document.getElementById("fac-legend");
+const facChips = Object.entries(FACILITIES).map(([k, f]) => {
+  const n = Object.values(B).filter((b) => f.has(b.p)).length;
+  const c = document.createElement("button");
+  c.type = "button"; c.className = "chip fac-chip"; c.dataset.kind = k;
+  c.setAttribute("aria-pressed", "false");
+  c.style.setProperty("--c", f.color);
+  c.innerHTML = `<i class="dot"></i><span>${f.label}</span><small>${n}</small>`;
+  c.onclick = () => selectFacility(facSel === k ? null : k);   // 다시 누르면 해제
+  facLegend.appendChild(c);
+  return c;
+});
+L.DomEvent.disableClickPropagation(facLegend);
+
+function selectFacility(k) {
+  facSel = k;
+  facChips.forEach((c) => c.setAttribute("aria-pressed", c.dataset.kind === k));
+  refreshLit();
+  if (!k) return;
+  const f = FACILITIES[k];
+  const hits = Object.values(B).filter((b) => f.has(b.p));
+  hits.forEach((b) => b.els().forEach((el) => blink(el)));
+  toast(hits.length ? `${f.label}이(가) 있는 건물 ${hits.length}곳` : `아직 입력된 ${f.label} 정보가 없습니다`);
+}
+function setWc(on) {
+  wcOn = on;
+  btnWc.setAttribute("aria-pressed", on);
+  facLegend.classList.toggle("on", on);
+  if (!on) facSel = null;
+  facChips.forEach((c) => c.setAttribute("aria-pressed", c.dataset.kind === facSel));
+  refreshLit();
+}
+btnWc.onclick = () => {
+  const on = btnWc.getAttribute("aria-pressed") !== "true";
+  if (on) offOthers("wc");
+  setWc(on);
+};
+
+// ===== 보행 네트워크: 경사 등급별 표시 =====
+// 경사 등급 값 맞추기 (영어 값·공백이 있어도 한글 등급으로 통일)
+const CLS_MAP = {
+  "Meets standard": "기준충족",
+  "Relaxed standard": "완화기준",
+  "Exceeds standard": "기준초과",
+  "No data": "정보없음",
+};
+NET_LINKS.features.forEach((f) => {
+  const c = (f.properties.slp_cls ?? "").toString().trim();
+  f.properties.slp_cls = CLS_MAP[c] || c || "정보없음";
+});
+
+const SLOPE_COLORS = {
+  '기준충족': '#2E9E4F',
+  '완화기준': '#F2A900',
+  '기준초과': '#D7301F',
+  '정보없음': '#9AA0A6'
+};
+
+const slopeLayer = L.geoJSON(NET_LINKS, {
+  style: f => ({
+    color: SLOPE_COLORS[f.properties.slp_cls] || '#9AA0A6',
+    weight: 4,
+    opacity: 0.9
+  }),
+  onEachFeature: (f, layer) => {
+    const p = f.properties;
+    const deg = p.d_slope == null ? '-' : p.d_slope.toFixed(1) + '°';
+    layer.bindTooltip(`${p.slp_cls} · ${deg}`);
+  }
+});   // 처음 화면에서는 꺼 둠 (오른쪽 위 버튼으로 켜기)
+
+// ===== 경로 탐색 (브라우저 다익스트라) =====
+// 나중에 pgRouting으로 바꿀 때는 findRoute() 안쪽만 교체
+// 비용 계산: 링크의 길이와 경사 등급(slp_cls)으로 그때그때 계산 (QGIS의 cost 필드는 안 씀)
+const RELAXED_W = 1.5;     // 완화기준 구간: 거리 × 1.5
+const STEEP_W = 1000;      // 2차 탐색에서 급경사 1m = 평지 1000m (급경사를 최대한 덜 지나는 길을 고르게)
+// 출발·도착 출입구의 연결선(출입구 경사로)은 어차피 지나야 하므로 급경사 판단에서 뺌 (exempt)
+const COST_AVOID = (p, exempt) => {   // 1차: 급경사(기준초과)는 아예 지나가지 않음
+  if (exempt) return p.length;
+  if (p.slp_cls === "기준초과" || p.slp_cls === "정보없음") return null;
+  return p.length * (p.slp_cls === "완화기준" ? RELAXED_W : 1);
+};
+const COST_LEAST_STEEP = (p, exempt) => {   // 2차: 피할 수 없을 때만, 급경사 길이를 최소로
+  if (exempt) return p.length;
+  if (p.slp_cls === "정보없음") return null;
+  const base = p.length * (p.slp_cls === "완화기준" ? RELAXED_W : 1);
+  return p.slp_cls === "기준초과" ? base + p.length * STEEP_W : base;
+};
+
+const GRAPH = {};
+const LINK_BY_ID = {};
+NET_LINKS.features.forEach((f) => {
+  const p = f.properties;
+  if (p.length == null) return;
+  LINK_BY_ID[p.link_id] = f;
+  (GRAPH[p.source] ||= []).push({ to: p.target, link: p.link_id });
+  (GRAPH[p.target] ||= []).push({ to: p.source, link: p.link_id });
+});
+
+function entranceNode(entId) {
+  const f = NET_ENTRANCES.features.find(f => f.properties.entranceID === entId);
+  return f ? f.properties.node_id : null;
+}
+
+// 다익스트라 한 번 실행 (costFn이 null을 주는 링크는 지나가지 않음)
+function dijkstra(startNode, endNode, costFn, exemptLinks = new Set()) {
+  const dist = { [startNode]: 0 };
+  const prev = {};
+  const visited = new Set();
+  const queue = [[0, startNode]];
+
+  while (queue.length) {
+    queue.sort((a, b) => a[0] - b[0]);
+    const [d, node] = queue.shift();
+    if (visited.has(node)) continue;
+    visited.add(node);
+    if (node === endNode) break;
+
+    for (const e of (GRAPH[node] || [])) {
+      const c = costFn(LINK_BY_ID[e.link].properties, exemptLinks.has(e.link));
+      if (c == null) continue;
+      const nd = d + c;
+      if (dist[e.to] === undefined || nd < dist[e.to]) {
+        dist[e.to] = nd;
+        prev[e.to] = { node, link: e.link };
+        queue.push([nd, e.to]);
+      }
+    }
+  }
+
+  if (dist[endNode] === undefined) return null;   // 경로 없음
+
+  const links = [];
+  let cur = endNode;
+  while (cur !== startNode) {
+    links.unshift(prev[cur].link);
+    cur = prev[cur].node;
+  }
+  const length = links.reduce((s, id) => s + LINK_BY_ID[id].properties.length, 0);
+  return { cost: dist[endNode], length, links };
+}
+
+// 경로 찾기: 1차로 급경사를 피하는 길, 없으면 2차로 급경사를 가장 덜 지나는 길
+// (나중에 pgRouting으로 바꿀 때는 이 함수 안쪽만 교체)
+function findRoute(startNode, endNode) {
+  // 출발·도착 출입구에 붙은 연결선 = 출입구 경사로 → 급경사 판단에서 제외하고 따로 안내
+  const exempt = new Set([...(GRAPH[startNode] || []), ...(GRAPH[endNode] || [])].map((e) => e.link));
+  const avoid = dijkstra(startNode, endNode, COST_AVOID, exempt);
+  if (avoid) return { ...avoid, exempt, steepUnavoidable: false };
+  const least = dijkstra(startNode, endNode, COST_LEAST_STEEP, exempt);
+  return least ? { ...least, exempt, steepUnavoidable: true } : null;
+}
+
+// ===== 경로 지도 표시 =====
+let routeLayer = null;
+
+function drawRoute(startEnt, endEnt) {
+  const s = entranceNode(startEnt);
+  const e = entranceNode(endEnt);
+  if (s == null || e == null) return null;
+
+  const r = findRoute(s, e);
+  if (routeLayer) { map.removeLayer(routeLayer); routeLayer = null; }
+  if (!r) return null;
+
+  const fc = { type: 'FeatureCollection', features: r.links.map(id => LINK_BY_ID[id]) };
+
+  const halo = L.geoJSON(fc, {
+    style: { color: '#1E3A8A', weight: 11, opacity: 0.55 }
+  });
+  const line = L.geoJSON(fc, {
+    style: f => ({
+      color: SLOPE_COLORS[f.properties.slp_cls] || '#9AA0A6',
+      weight: 5,
+      opacity: 1
+    })
+  });
+
+  routeLayer = L.layerGroup([halo, line]).addTo(map);
+  // 지금 보고 있는 확대 상태는 그대로 두고, 경로가 화면(제목~팝업 사이)을 벗어날 때만 맞춤
+  const top = document.querySelector(".title").getBoundingClientRect().bottom + 20;
+  const bottom = routePanel.getBoundingClientRect().top - 20;
+  const rb = halo.getBounds();
+  const nw = map.latLngToContainerPoint(rb.getNorthWest());
+  const se = map.latLngToContainerPoint(rb.getSouthEast());
+  const size = map.getSize();
+  const visible = nw.x >= 20 && se.x <= size.x - 20 && nw.y >= top && se.y <= bottom;
+  if (!visible) {
+    map.fitBounds(rb, {
+      paddingTopLeft: [30, top],
+      paddingBottomRight: [30, window.innerHeight - bottom],
+    });
+  }
+  return r;
+}
+// ===== 길 경사 등급 켜기/끄기 (메뉴바 버튼) =====
+// 다른 기능과 함께 켜 둘 수 있음 (길찾기 중에도 경사 확인용)
+const btnSlope = document.getElementById("btn-slope");
+const slopeLegend = document.getElementById("slope-legend");
+Object.entries(SLOPE_COLORS).forEach(([k, c]) => {
+  const it = document.createElement("span");
+  it.className = "item";
+  it.innerHTML = `<i class="bar" style="background:${c}"></i>${k}`;
+  slopeLegend.appendChild(it);
+});
+function setSlope(on) {
+  btnSlope.setAttribute("aria-pressed", on);
+  slopeLegend.classList.toggle("on", on);
+  if (on) slopeLayer.addTo(map); else map.removeLayer(slopeLayer);
+}
+btnSlope.addEventListener("click", () => {
+  const on = btnSlope.getAttribute("aria-pressed") !== "true";
+  if (on) offOthers("slope");
+  setSlope(on);
+});
+
+// ===== 길찾기 =====
+// ===== 출입구 표시 이름 (data.js = 엑셀 변환 결과에서 자동 생성) =====
+const BLD_NAME = {};
+BF_DATA.buildings.features.forEach(f => {
+  BLD_NAME[f.properties.building_id] = f.properties.name;
+});
+
+const ENT_LABELS = {};
+BF_DATA.entrances.features.forEach(f => {
+  const p = f.properties;
+  const bid = p.entrance_id.split('-')[0];   // 출입구 ID 앞부분(B02)으로 건물 찾기
+  const ename = (p.name || p.entrance_id).trim();
+  ENT_LABELS[p.entrance_id] = `${BLD_NAME[bid] || bid} - ${ename}`;
+});
+
+// ===== 길찾기: 지도에서 출입구를 눌러 출발·도착 선택 =====
+map.createPane("routePick");
+map.getPane("routePick").style.zIndex = 650;   // 다른 점들보다 위에 (누르기 쉽게)
+
+const pickLayer = L.layerGroup();   // 고를 수 있는 출입구 (길찾기 켰을 때만)
+const pinLayer = L.layerGroup();    // 출발·도착 표시
+let pickStart = null, pickEnd = null;
+const entLabel = (id) => ENT_LABELS[id] || id;
+
+const PICK_MARKERS = {};   // 출입구 ID → 길찾기 동그라미
+NET_ENTRANCES.features.forEach((f) => {
+  const id = f.properties.entranceID;
+  const g = f.geometry;
+  const [lng, lat] = g.type === "MultiPoint" ? g.coordinates[0] : g.coordinates;
+  const m = L.circleMarker([lat, lng], {
+    pane: "routePick", radius: DOT_R, color: "#1C4A86", weight: DOT_R > 8 ? 3.5 : 2.5, fillColor: "#fff", fillOpacity: 1, className: "pick-dot",
+  });
+  m.bindTooltip(esc(entLabel(id)), { direction: "top", offset: [0, -8] });   // 길찾기에서만 출입구 이름 표시
+  m.on("click", () => choose(id, [lat, lng]));
+  PICK_MARKERS[id] = m;
+  pickLayer.addLayer(m);
+});
+
+// 길찾기 동그라미 보이기: ids를 주면 그 출입구만, 없으면 전부
+function showPicks(ids) {
+  pickLayer.clearLayers();
+  Object.entries(PICK_MARKERS).forEach(([id, m]) => {
+    if (!ids || ids.includes(id)) pickLayer.addLayer(m);
+  });
+}
+
+// 같은 건물 출입구끼리 경로 추천을 허용하는 건물 (출입구 ID 앞부분 기준)
+const SAME_BLDG_OK = new Set(["B05", "B07"]);   // 5호관, 학생회관(비룡플라자)
+const bldOf = (id) => id.split("-")[0];
+let notice = "";   // 패널에 잠깐 띄울 안내 문구
+
+const routePanel = document.createElement("div");
+routePanel.id = "route-panel";
+routePanel.className = "route-panel";
+routePanel.setAttribute("role", "dialog");
+routePanel.setAttribute("aria-label", "휠체어 경로 찾기");
+routePanel.innerHTML = `
+  <div class="rp-head">
+    <span class="rp-title">휠체어 경로 찾기</span>
+    <button type="button" class="rp-close" aria-label="길찾기 닫기">×</button>
+  </div>
+  <div class="rp-sel">
+    <button type="button" id="rp-swap" class="rp-swap" aria-label="출발·도착 바꾸기" title="출발·도착 바꾸기">
+      <svg viewBox="0 0 24 48" aria-hidden="true"><path d="M12 3 L4 13 H9 V35 H4 L12 45 L20 35 H15 V13 H20 Z" fill="currentColor"/></svg>
+    </button>
+    <span class="pin pin-start">출발</span><span class="rp-val" id="rp-start"></span>
+    <span class="pin pin-end">도착</span><span class="rp-val" id="rp-end"></span>
+  </div>
+  <div id="rp-result" aria-live="polite"></div>
+  <div class="rp-actions">
+    <button type="button" id="rp-reset">다시 선택</button>
+  </div>`;
+document.body.appendChild(routePanel);
+L.DomEvent.disableClickPropagation(routePanel);
+L.DomEvent.disableScrollPropagation(routePanel);
+
+const btnRoute = document.getElementById("btn-route");
+const rpStart = routePanel.querySelector("#rp-start");
+const rpEnd = routePanel.querySelector("#rp-end");
+const rpResult = routePanel.querySelector("#rp-result");
+const rpSwap = routePanel.querySelector("#rp-swap");
+const rpReset = routePanel.querySelector("#rp-reset");
+
+const pin = (ll, text, cls) => L.marker(ll, {
+  pane: "routePick", interactive: false, keyboard: false,
+  icon: L.divIcon({ className: "", iconSize: null, html: `<span class="map-pin"><span class="pin ${cls}">${text}</span></span>` }),
+});
+
+function clearRoute() {
+  if (routeLayer) { map.removeLayer(routeLayer); routeLayer = null; }
+}
+
+// 출입구를 누를 때: 출발 → 도착 순서. 둘 다 정해진 뒤 다시 누르면 새 출발지로 시작
+function choose(id, ll) {
+  notice = "";
+  if (!pickStart || pickEnd) {
+    pickStart = { id, ll }; pickEnd = null; clearRoute();
+  } else if (id === pickStart.id) {
+    return;
+  } else if (bldOf(id) === bldOf(pickStart.id) && !SAME_BLDG_OK.has(bldOf(id))) {
+    notice = "5호관과 비룡플라자를 제외한 동일 건물 간의 경로 추천은 불가합니다.";
+  } else {
+    pickEnd = { id, ll };
+  }
+  render();
+}
+
+function render() {
+  pinLayer.clearLayers();
+  if (pickStart) pinLayer.addLayer(pin(pickStart.ll, "출발", "pin-start"));
+  if (pickEnd) pinLayer.addLayer(pin(pickEnd.ll, "도착", "pin-end"));
+
+  rpStart.textContent = pickStart ? entLabel(pickStart.id) : "지도에서 출입구를 누르세요";
+  rpStart.classList.toggle("empty", !pickStart);
+  rpEnd.textContent = pickEnd ? entLabel(pickEnd.id) : (pickStart ? "지도에서 출입구를 누르세요" : "출발지를 먼저 고르세요");
+  rpEnd.classList.toggle("empty", !pickEnd);
+  rpSwap.disabled = !(pickStart && pickEnd);
+  rpReset.disabled = !pickStart;
+
+  if (!pickStart || !pickEnd) {
+    showPicks(null);   // 고르는 중에는 출입구 전부 표시
+    if (notice) { rpResult.innerHTML = `<span class="rp-warn">${notice}</span>`; return; }
+    rpResult.textContent = pickStart ? "도착할 출입구를 지도에서 누르세요." : "출발할 출입구를 지도에서 누르세요.";
+    return;
+  }
+
+  const r = drawRoute(pickStart.id, pickEnd.id);
+  if (!r) { showPicks(null); rpResult.textContent = "휠체어로 이동할 수 있는 경로가 없습니다. 다른 출입구를 골라 보세요."; return; }
+  showPicks([pickStart.id, pickEnd.id]);   // 경로가 나오면 출발·도착 출입구만 남김
+
+  // 길 위의 급경사 (출발·도착 출입구 경사로는 제외)
+  const steep = r.links.filter((id) => !r.exempt.has(id))
+                       .map((id) => LINK_BY_ID[id].properties)
+                       .filter((p) => p.slp_cls === "기준초과");
+  const steepLen = steep.reduce((a, p) => a + p.length, 0);
+  const min = Math.max(1, Math.round(r.length / 0.8 / 60));
+
+  // 출입구 경사도 안내: 기준충족은 값만, 완화기준은 (완화기준), 기준초과는 (주의)
+  const rampLine = (label, entId) => {
+    const deg = RAMP_DEG[entId];
+    const c = rampClass(deg);
+    if (!c) return `${label} 출입구 경사도 : 미측정`;
+    const txt = `${label} 출입구 경사도 : ${deg.toFixed(1)}°`;
+    if (c[0] === "기준초과") return `<span class="rp-warn">${txt} (주의)</span>`;
+    if (c[0] === "완화기준") return `<span class="rp-caution">${txt} (완화기준)</span>`;
+    return txt;
+  };
+
+  rpResult.innerHTML = `거리 <b>${Math.round(r.length)}m</b>, 약 <b>${min}분</b><br>` +
+    (steep.length
+      ? `<span class="rp-warn">급경사를 피할 수 없는 경로입니다<br>급경사 구간 ${steep.length}곳 (${Math.round(steepLen)}m)</span>`
+      : "급경사 구간 없음") +
+    `<div class="rp-ramp">${rampLine("출발", pickStart.id)}<br>${rampLine("도착", pickEnd.id)}</div>`;
+}
+
+function openRoute() {
+  offOthers("route");
+  map.closePopup();
+  if (selected) { selected = null; refreshLit(); }
+  map.getContainer().classList.add("route-mode");
+  btnRoute.setAttribute("aria-pressed", "true");
+  routePanel.classList.add("open");
+  pickLayer.addTo(map);
+  pinLayer.addTo(map);
+  render();
+}
+function closeRoute() {
+  map.getContainer().classList.remove("route-mode");
+  notice = "";
+  showPicks(null);
+  btnRoute.setAttribute("aria-pressed", "false");
+  routePanel.classList.remove("open");
+  pickStart = pickEnd = null;
+  clearRoute();
+  pinLayer.clearLayers();
+  map.removeLayer(pickLayer);
+  map.removeLayer(pinLayer);
+}
+
+btnRoute.addEventListener("click", () => {
+  if (routePanel.classList.contains("open")) closeRoute(); else openRoute();
+});
+routePanel.querySelector(".rp-close").addEventListener("click", closeRoute);
+rpSwap.addEventListener("click", () => { [pickStart, pickEnd] = [pickEnd, pickStart]; render(); });
+rpReset.addEventListener("click", () => { pickStart = pickEnd = null; notice = ""; clearRoute(); render(); });
+
+// ===== 메뉴바 높이 (지도 표기·경로 화면 맞춤에 사용) =====
+const dockEl = document.querySelector(".dock");
+function dockHeight() { return dockEl.getBoundingClientRect().height; }
+function syncDock() { document.documentElement.style.setProperty("--dock-h", dockHeight() + "px"); }
+new ResizeObserver(syncDock).observe(dockEl);
+syncDock();
+
+
+// ===== 메뉴바 네 기능은 한 번에 하나만: 하나를 켜면 나머지는 자동으로 꺼짐 =====
+function offOthers(keep) {
+  if (keep !== "slope" && btnSlope.getAttribute("aria-pressed") === "true") setSlope(false);
+  if (keep !== "ent" && btnEnt.getAttribute("aria-pressed") === "true") setEnt(false);
+  if (keep !== "wc" && wcOn) setWc(false);
+  if (keep !== "route" && routePanel.classList.contains("open")) closeRoute();
+  map.closePopup();
+  if (selected) { selected = null; refreshLit(); }   // 선택했던 건물 강조도 해제
+  document.querySelectorAll(".bld-shape.blink, .bld-tag.blink").forEach((el) => el.classList.remove("blink"));
+}
+</script>
+</body>
+</html>
