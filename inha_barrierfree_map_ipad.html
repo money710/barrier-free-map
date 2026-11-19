@@ -335,9 +335,20 @@ L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
 }).addTo(map);
 
 // 애니메이션을 처음부터 다시 재생
-function blink(el, cls = "blink") {
-  if (!el) return;
-  el.classList.remove(cls); void el.getBoundingClientRect(); el.classList.add(cls);
+// 반짝임: CSS 클래스 대신 Web Animations API 사용 (아이패드 사파리에서도 매번 다시 재생되고, 중간에 바로 멈출 수 있음)
+const REDUCE_MOTION = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+function stopBlink(el) {
+  if (el && el.getAnimations) el.getAnimations().forEach((a) => a.cancel());
+}
+function blink(el) {
+  if (!el || REDUCE_MOTION || !el.animate) return;
+  if (el.classList.contains("ent-dot")) return;   // 출입구 점은 반짝이지 않음
+  stopBlink(el);
+  const color = getComputedStyle(el).getPropertyValue("--flash").trim() || "#FFD400";
+  const frames = el.classList.contains("bld-tag")
+    ? [{ boxShadow: `0 0 0 0 ${color}` }, { boxShadow: `0 0 0 3px ${color}` }, { boxShadow: `0 0 0 0 ${color}` }]
+    : [{ strokeOpacity: 1 }, { strokeOpacity: 0.45 }, { strokeOpacity: 1 }];
+  el.animate(frames, { duration: 1200, iterations: 2, easing: "ease-in-out" });   // 속도 · 횟수
 }
 const toastEl = document.getElementById("toast");
 let toastTimer;
@@ -383,6 +394,7 @@ function buildingPopup(p) {
 
 function setLit(id, on, color) {
   B[id].els().forEach((el) => {
+    if (!on) stopBlink(el);   // 강조가 꺼지면 반짝임도 바로 멈춤 (노란 테두리가 잠깐 보이던 문제)
     el.classList.toggle("lit", on);
     if (color) el.style.setProperty("--flash", color); else el.style.removeProperty("--flash");
   });
@@ -917,7 +929,7 @@ function offOthers(keep) {
   if (keep !== "route" && routePanel.classList.contains("open")) closeRoute();
   map.closePopup();
   if (selected) { selected = null; refreshLit(); }   // 선택했던 건물 강조도 해제
-  document.querySelectorAll(".bld-shape.blink, .bld-tag.blink").forEach((el) => el.classList.remove("blink"));
+  document.querySelectorAll(".bld-shape, .bld-tag").forEach((el) => stopBlink(el));
 }
 </script>
 </body>
