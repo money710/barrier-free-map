@@ -208,6 +208,8 @@
   .pin-end { background: var(--ink); }
   .map-pin { transform: translate(-50%, calc(-100% - 6px)); display: inline-block; }
   .pick-dot { cursor: pointer; }
+  /* 특정 장소(정문·후문·쪽문·운동장·인경호 등): 남색 네모 */
+  .pick-sq { background: #1F2A5C; border: 2.5px solid #fff; border-radius: 3px; box-shadow: 0 0 0 1px rgba(0,0,0,.35), 0 1px 4px rgba(0,0,0,.4); cursor: pointer; }
   /* 길찾기 중에는 건물을 눌러도 반응하지 않음 */
   .route-mode .bld-shape, .route-mode .bld-icon { pointer-events: none !important; }
 
@@ -231,7 +233,7 @@
   }
 
   /* ===================== 터치 기기 공통 ===================== */
-  button, .chip, .pick-dot { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+  button, .chip, .pick-dot, .pick-sq { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
   .dock > button:active, .legend .chip:active, .rp-swap:active, .rp-actions button:active { transform: scale(.97); }
   html, body { overscroll-behavior: none; }   /* 지도 끌 때 화면 전체가 튕기지 않게 */
 </style>
@@ -779,9 +781,16 @@ NET_ENTRANCES.features.forEach((f) => {
   const id = f.properties.entranceID;
   const g = f.geometry;
   const [lng, lat] = g.type === "MultiPoint" ? g.coordinates[0] : g.coordinates;
-  const m = L.circleMarker([lat, lng], {
-    pane: "routePick", radius: DOT_R, color: "#1C4A86", weight: DOT_R > 8 ? 3.5 : 2.5, fillColor: "#fff", fillOpacity: 1, className: "pick-dot",
-  });
+  // 건물 출입구는 하얀 동그라미, 특정 장소(정문·후문 등)는 남색 네모
+  const size = DOT_R * 2 + 2;
+  const m = isPlace(id)
+    ? L.marker([lat, lng], {
+        pane: "routePick", keyboard: false,
+        icon: L.divIcon({ className: "pick-sq", iconSize: [size, size], iconAnchor: [size / 2, size / 2] }),
+      })
+    : L.circleMarker([lat, lng], {
+        pane: "routePick", radius: DOT_R, color: "#1C4A86", weight: DOT_R > 8 ? 3.5 : 2.5, fillColor: "#fff", fillOpacity: 1, className: "pick-dot",
+      });
   m.bindTooltip(esc(entLabel(id)), { direction: "top", offset: [0, -8] });   // 길찾기에서만 출입구 이름 표시
   m.on("click", () => choose(id, [lat, lng]));
   PICK_MARKERS[id] = m;
