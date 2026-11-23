@@ -360,7 +360,7 @@ fitCampus();
 window.addEventListener("load", () => setTimeout(() => fitCampus(), 100));
 console.info("[배리어프리맵] 휴대폰·아이패드 통합 2026-11-19 버전");   // 휴대폰에 새 파일이 반영됐는지 확인용
 
-// ===== 배경지도 (우상단에서 선택: 항공영상 / 일반지도 / 항공영상+일반지도) =====
+// ===== 배경지도 (우상단에서 선택: 위성영상 / 일반지도 / 위성영상+일반지도) =====
 // 브이월드 인증키: 등록한 주소(money710.github.io)에서만 동작 → 그 외(로컬 테스트 등)에서는 Esri·OSM으로 대신 표시
 const VWORLD_KEY = "1E88965C-58D6-4447-BA2A-6141E9DA18ED";
 const VWORLD_HOSTS = ["money710.github.io"];   // 브이월드에 등록한 서비스 주소
@@ -373,7 +373,7 @@ const ESRI_SAT = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Ima
 const ESRI_LABEL = "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}";
 const OSM = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 
-// 각 배경지도를 이루는 타일 레이어 (항공영상+일반지도 = 항공영상 위에 지명·도로명 라벨)
+// 각 배경지도를 이루는 타일 레이어 (위성영상+일반지도 = 위성영상 위에 지명·도로명 라벨)
 function baseLayers(key) {
   if (useVworld) {
     if (key === "sat")  return [L.tileLayer(vwUrl("Satellite", "jpeg"), { ...TILE_OPT, attribution: VW_ATTR })];
@@ -385,7 +385,7 @@ function baseLayers(key) {
   return [L.tileLayer(ESRI_SAT, { ...TILE_OPT, attribution: "Imagery &copy; Esri" }), L.tileLayer(ESRI_LABEL, TILE_OPT)];
 }
 
-let baseKey = "hybrid";   // 처음 화면: 항공영상 + 일반지도
+let baseKey = "hybrid";   // 처음 화면: 위성영상 + 일반지도
 let baseNow = [];
 function setBase(key) {
   baseKey = key;
@@ -413,7 +413,7 @@ const BaseControl = L.Control.extend({
     const box = L.DomUtil.create("div", "basemap");
     box.setAttribute("role", "group");
     box.setAttribute("aria-label", "배경지도 선택");
-    [["sat", "항공영상"], ["base", "일반지도"]].forEach(([k, label]) => {
+    [["sat", "위성영상"], ["base", "일반지도"], ["hybrid", "위성영상<br>+ 일반지도"]].forEach(([k, label]) => {
       const b = L.DomUtil.create("button", "", box);
       b.type = "button"; b.dataset.key = k; b.innerHTML = label;
       b.setAttribute("aria-pressed", "false");
@@ -688,12 +688,15 @@ const slopeLayer = L.geoJSON(NET_LINKS, {
 // ===== 경로 탐색 (브라우저 다익스트라) =====
 // 나중에 pgRouting으로 바꿀 때는 findRoute() 안쪽만 교체
 // 비용 계산: 링크의 길이와 경사 등급(slp_cls)으로 그때그때 계산 (QGIS의 cost 필드는 안 씀)
-const RELAXED_W = 1.5;     // 완화기준 구간: 거리 × 1.5
-const STEEP_W = 1000;      // 2차 탐색에서 급경사 1m = 평지 1000m (급경사를 최대한 덜 지나는 길을 고르게)
+const RELAXED_W = 1.5;       // 완화기준 구간: 거리 × 1.5
+const SHORT_STEEP_M = 10;    // 이 길이(m) 이하의 짧은 급경사는 1차 탐색에서도 지나갈 수 있음
+const SHORT_STEEP_W = 10;    // 짧은 급경사 1m = 평지 10m (우회로가 이보다 짧으면 우회, 훨씬 멀면 짧은 급경사로 통과)
+const STEEP_W = 50;          // 2차 탐색(급경사를 피할 수 없을 때) 급경사 1m = 평지 50m
 // 출발·도착 출입구의 연결선(출입구 경사로)은 어차피 지나야 하므로 급경사 판단에서 뺌 (exempt)
 const COST_AVOID = (p, exempt) => {   // 1차: 급경사(기준초과)는 아예 지나가지 않음
   if (exempt) return p.length;
-  if (p.slp_cls === "기준초과" || p.slp_cls === "정보없음") return null;
+  if (p.slp_cls === "정보없음") return null;
+  if (p.slp_cls === "기준초과") return p.length <= SHORT_STEEP_M ? p.length * SHORT_STEEP_W : null;
   return p.length * (p.slp_cls === "완화기준" ? RELAXED_W : 1);
 };
 const COST_LEAST_STEEP = (p, exempt) => {   // 2차: 피할 수 없을 때만, 급경사 길이를 최소로
@@ -992,10 +995,13 @@ function render() {
     return txt;
   };
 
-  rpResult.innerHTML = `거리 <b>${Math.round(r.length)}m</b>, 약 <b>${min}분</b><br>` +
-    (steep.length
+  // 급경사 안내: 피할 수 없는 경우(2차 탐색)와, 우회로가 너무 멀어 짧은 급경사를 지나는 경우를 구분
+  const steepMsg = !steep.length
+    ? "급경사 구간 없음"
+    : r.steepUnavoidable
       ? `<span class="rp-warn">급경사를 피할 수 없는 경로입니다<br>급경사 구간 ${steep.length}곳 (${Math.round(steepLen)}m)</span>`
-      : "급경사 구간 없음") +
+      : `<span class="rp-warn">짧은 급경사 구간 ${steep.length}곳 (${Math.round(steepLen)}m) 포함</span><br><small>돌아가는 길이 훨씬 멀어 이 경로로 안내합니다</small>`;
+  rpResult.innerHTML = `거리 <b>${Math.round(r.length)}m</b>, 약 <b>${min}분</b><br>` + steepMsg +
     (() => {
       const lines = [rampLine("출발", pickStart.id), rampLine("도착", pickEnd.id)].filter(Boolean);
       return lines.length ? `<div class="rp-ramp">${lines.join("<br>")}</div>` : "";
