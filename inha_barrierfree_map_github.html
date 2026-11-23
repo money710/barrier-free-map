@@ -3,9 +3,6 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<!-- 휴대폰 + 아이패드 통합 버전: 화면 크기에 따라 자동으로 크기 조절 -->
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="mobile-web-app-capable" content="yes">
 <title>인하대 배리어프리맵</title>
 <!-- 지도 라이브러리(Leaflet)와 글꼴(Pretendard) -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
@@ -28,7 +25,7 @@
     --limited: #C98A00;   /* 제한적 */
     --warn: #C8372D;      /* 주의사항 */
     /* ===== 화면 크기 배율: 글씨·버튼·팝업이 작거나 크면 이 숫자만 바꾸세요 (1 = 기본) ===== */
-    --ui: 1.35;   /* 기본(아이패드 가로 1180×820) 배율. 기기별 배율은 <style> 맨 아래 '기기별 크기'에서 조절 */
+    --ui: 2.0;   /* 버튼·팝업 전체 크기 배율 (키우려면 숫자를 올리기) */
     /* 오른쪽 위 확대·축소, 배경지도 버튼 크기 배율 */
     --ctrl: 1.8;
   }
@@ -160,7 +157,11 @@
   .err div { background: #fff; max-width: 420px; padding: 20px 22px; border-radius: 10px; line-height: 1.6; }
   .err h2 { margin: 0 0 8px; font-size: 17px; color: var(--warn); }
 
-  /* (휴대폰 설정은 <style> 맨 아래 '기기별 크기'로 옮김) */
+  @media (max-width: 560px) {
+    :root { --ui: 0.95; --ctrl: 1.2; }   /* 휴대폰 배율 (크거나 작으면 이 숫자 조절) */
+    .dock { gap: 6px; padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px)); }
+    .dock > button { max-width: none; font-size: 13px; padding: 8px 3px; }
+  }
 
   /* 길찾기 패널: 제목 아래 왼쪽 위 (지도를 가리지 않게) */
   .route-panel {
@@ -208,34 +209,10 @@
   .pin-end { background: var(--ink); }
   .map-pin { transform: translate(-50%, calc(-100% - 6px)); display: inline-block; }
   .pick-dot { cursor: pointer; }
-  /* 특정 장소(정문·후문·쪽문·운동장·인경호 등): 남색 네모 */
-  .pick-sq { background: #1F2A5C; border: 2.5px solid #fff; border-radius: 3px; box-shadow: 0 0 0 1px rgba(0,0,0,.35), 0 1px 4px rgba(0,0,0,.4); cursor: pointer; }
   /* 길찾기 중에는 건물을 눌러도 반응하지 않음 */
   .route-mode .bld-shape, .route-mode .bld-icon { pointer-events: none !important; }
-
-  /* ===================== 기기별 크기 (숫자만 바꾸면 됨) ===================== */
-  /* 아이패드 세로 (820×1180 등) */
-  @media (min-width: 561px) and (max-width: 1024px) and (orientation: portrait) {
-    :root { --ui: 1.2; }
-  }
-  /* 휴대폰 세로 */
   @media (max-width: 560px) {
-    :root { --ui: 0.95; --ctrl: 1.2; }
-    .dock { gap: 6px; padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px)); }
-    .dock > button { max-width: none; font-size: 13px; padding: 8px 3px; }
   }
-  /* 휴대폰 가로 (높이가 낮은 화면): 메뉴바·팝업을 더 작게 */
-  @media (max-height: 500px) and (orientation: landscape) {
-    :root { --ui: 0.85; --ctrl: 1.1; }
-    .dock { padding: 4px 10px calc(4px + env(safe-area-inset-bottom, 0px)); }
-    .dock > button { padding: 5px 6px; }
-    .route-panel { max-height: calc(100vh - var(--dock-h, 0px) - 16px); overflow-y: auto; }
-  }
-
-  /* ===================== 터치 기기 공통 ===================== */
-  button, .chip, .pick-dot, .pick-sq { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
-  .dock > button:active, .legend .chip:active, .rp-swap:active, .rp-actions button:active { transform: scale(.97); }
-  html, body { overscroll-behavior: none; }   /* 지도 끌 때 화면 전체가 튕기지 않게 */
 </style>
 </head>
 <body>
@@ -279,11 +256,8 @@ const DOOR = { automatic: "자동문", hinged: "여닫이", sliding: "미닫이"
 const WC_TYPE = { unisex: "남녀공용", male: "남", female: "여", unknown: "" };
 const WC_STATE = { in_service: "", broken: "고장", locked: "잠김", unknown: "" };
 const ENT = { yes: ["휠체어 진입 가능", "#1F8A5B"], limited: ["제한적", "#C98A00"] };
-// 특정 장소(정문·후문·쪽문·운동장·인경호 등): 건물이 아니라 길찾기 출발·도착 전용
-const PLACE_BLD = "B00";
-const isPlace = (id) => String(id || "").split("-")[0] === PLACE_BLD;
 // 지도 위 점 크기 (휴대폰에서는 작게)
-const DOT_R = window.matchMedia("(max-width: 560px), (max-height: 500px)").matches ? 7 : 10;
+const DOT_R = window.matchMedia("(max-width: 560px)").matches ? 7 : 10;
 // 출입문 종류별 색 (길 경사 등급의 초록·노랑·빨강과 겹치지 않게)
 // 출입구 경사로 실측 경사도 (network.js의 출입구 데이터에서 가져옴)
 const RAMP_DEG = {};
@@ -344,12 +318,38 @@ function fitCampus(bottomPanel) {
 fitCampus();
 // 글꼴·화면 크기가 다 정해진 뒤 한 번 더 맞춤 (휴대폰 주소창 때문에 높이가 바뀌는 경우 대비)
 window.addEventListener("load", () => setTimeout(() => fitCampus(), 100));
-console.info("[배리어프리맵] 휴대폰·아이패드 통합 2026-11-19 버전");   // 휴대폰에 새 파일이 반영됐는지 확인용
+console.info("[배리어프리맵] 2026-11-16 버전");   // 휴대폰에 새 파일이 반영됐는지 확인용
 
-// 배경지도: Esri 위성영상 (인증키 필요 없음)
-L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
-  maxZoom: 20, maxNativeZoom: 19, attribution: "Imagery &copy; Esri",
-}).addTo(map);
+// ===== 배경지도 =====
+// 브이월드 인증키: 등록한 주소(money710.github.io)에서만 동작 → 그 외(로컬 테스트 등)에서는 Esri 위성영상 사용
+const VWORLD_KEY = "1E88965C-58D6-4447-BA2A-6141E9DA18ED";
+const VWORLD_HOSTS = ["money710.github.io"];   // 브이월드에 등록한 서비스 주소
+const vwUrl = (layer, ext) => `https://api.vworld.kr/req/wmts/1.0.0/${VWORLD_KEY}/${layer}/{z}/{y}/{x}.${ext}`;
+
+function addEsri() {
+  L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
+    maxZoom: 20, maxNativeZoom: 19, attribution: "Imagery &copy; Esri",
+  }).addTo(map);
+}
+
+if (VWORLD_HOSTS.includes(location.hostname)) {
+  // 브이월드 항공영상 + 지명·도로명 라벨
+  const vwSat = L.tileLayer(vwUrl("Satellite", "jpeg"), {
+    maxZoom: 20, maxNativeZoom: 19, attribution: "&copy; 국토교통부 브이월드",
+  }).addTo(map);
+  const vwLabel = L.tileLayer(vwUrl("Hybrid", "png"), { maxZoom: 20, maxNativeZoom: 19 }).addTo(map);
+  // 인증 실패 등으로 브이월드 지도가 한 장도 안 나오면 Esri로 자동 전환
+  let vwOk = 0, vwErr = 0;
+  vwSat.on("tileload", () => vwOk++);
+  vwSat.on("tileerror", () => {
+    if (++vwErr >= 6 && vwOk === 0) {
+      map.removeLayer(vwSat); map.removeLayer(vwLabel); addEsri();
+      console.warn("[배리어프리맵] 브이월드 지도를 불러오지 못해 Esri 위성영상으로 전환했습니다.");
+    }
+  });
+} else {
+  addEsri();
+}
 
 // 애니메이션을 처음부터 다시 재생
 // 반짝임: CSS 클래스 대신 Web Animations API 사용 (아이패드 사파리에서도 매번 다시 재생되고, 중간에 바로 멈출 수 있음)
@@ -386,6 +386,15 @@ const FACILITIES = {
   park: { label: "장애인 주차장", color: "#8B5CF6", has: (p) => p.parking === "yes" || p.parking_count > 0 },   // 보라
 };
 
+// 장애인 주차장: 있음(n대) / 있음(대수 미조사) / 없음 / 미조사
+function parkingText(p) {
+  const base = HAS[p.parking] ?? "미조사";
+  const n = parseInt(p.parking_count, 10);
+  if (p.parking === "yes") return n > 0 ? `${base} (${n}대)` : `${base} (대수 미조사)`;
+  if (p.parking !== "no" && n > 0) return `있음 (${n}대)`;   // 유무 칸이 비었어도 대수가 있으면 있음으로
+  return base;
+}
+
 function buildingPopup(p) {
   const wcs = p.restrooms || [];
   const wcHtml = wcs.length
@@ -402,7 +411,7 @@ function buildingPopup(p) {
       <dl>
         <dt>장애인 화장실</dt><dd>${wcHtml}</dd>
         <dt>엘리베이터</dt><dd>${elev}</dd>
-        <dt>장애인 주차장</dt><dd>${HAS[p.parking] ?? "미조사"}</dd>
+        <dt>장애인 주차장</dt><dd>${parkingText(p)}</dd>
         <dt>출입구 경사로</dt><dd>${HAS[p.entrance_ramp] ?? "미조사"}</dd>
       </dl>
       ${p.caution ? `<p class="caution">* ${esc(p.caution)}</p>` : ""}
@@ -426,8 +435,8 @@ function refreshLit() {
 
 BF_DATA.buildings.features.forEach((f) => {
   const p = f.properties;
-  // 특정 장소(B00)와 좌표가 없는 행은 지도에 건물로 그리지 않음
-  if (p.building_id === PLACE_BLD || !f.geometry || (f.geometry.coordinates || []).flat(4).some((v) => v == null)) return;
+  // 특정 장소(B00: 정문·후문 등)와 좌표가 없는 행은 건물로 그리지 않음
+  if (p.building_id === "B00" || !f.geometry || (f.geometry.coordinates || []).flat(4).some((v) => v == null)) return;
   const center = p.center ? [p.center[1], p.center[0]] : null;
   let layer, els;
   if (f.geometry.type === "Point") {
@@ -454,7 +463,7 @@ BF_DATA.buildings.features.forEach((f) => {
 const doorKey = (p) => (p.door_type in DOOR_COLORS ? p.door_type : "unknown");
 const okEntrances = {
   type: "FeatureCollection",
-  features: BF_DATA.entrances.features.filter((f) => f.properties.wheelchair === "yes" && !isPlace(f.properties.entrance_id)),
+  features: BF_DATA.entrances.features.filter((f) => f.properties.wheelchair === "yes" && !String(f.properties.entrance_id).startsWith("B00")),
 };
 const entLayer = L.geoJSON(okEntrances, {
   pointToLayer: (f, latlng) => L.circleMarker(latlng, {
@@ -621,13 +630,12 @@ const COST_LEAST_STEEP = (p, exempt) => {   // 2차: 피할 수 없을 때만, �
 
 const GRAPH = {};
 const LINK_BY_ID = {};
-NET_LINKS.features.forEach((f, i) => {
+NET_LINKS.features.forEach((f) => {
   const p = f.properties;
-  if (p.length == null || p.source == null || p.target == null) return;
-  const key = "L" + i;   // link_id가 실수로 겹쳐도 경로 계산이 꼬이지 않도록 순번으로 관리
-  LINK_BY_ID[key] = f;
-  (GRAPH[p.source] ||= []).push({ to: p.target, link: key });
-  (GRAPH[p.target] ||= []).push({ to: p.source, link: key });
+  if (p.length == null) return;
+  LINK_BY_ID[p.link_id] = f;
+  (GRAPH[p.source] ||= []).push({ to: p.target, link: p.link_id });
+  (GRAPH[p.target] ||= []).push({ to: p.source, link: p.link_id });
 });
 
 function entranceNode(entId) {
@@ -675,13 +683,9 @@ function dijkstra(startNode, endNode, costFn, exemptLinks = new Set()) {
 
 // 경로 찾기: 1차로 급경사를 피하는 길, 없으면 2차로 급경사를 가장 덜 지나는 길
 // (나중에 pgRouting으로 바꿀 때는 이 함수 안쪽만 교체)
-function findRoute(startNode, endNode, exemptStart = true, exemptEnd = true) {
+function findRoute(startNode, endNode) {
   // 출발·도착 출입구에 붙은 연결선 = 출입구 경사로 → 급경사 판단에서 제외하고 따로 안내
-  // (정문·후문 같은 특정 장소는 경사로가 아니라 일반 길이므로 제외하지 않음)
-  const exempt = new Set([
-    ...(exemptStart ? GRAPH[startNode] || [] : []),
-    ...(exemptEnd ? GRAPH[endNode] || [] : []),
-  ].map((e) => e.link));
+  const exempt = new Set([...(GRAPH[startNode] || []), ...(GRAPH[endNode] || [])].map((e) => e.link));
   const avoid = dijkstra(startNode, endNode, COST_AVOID, exempt);
   if (avoid) return { ...avoid, exempt, steepUnavoidable: false };
   const least = dijkstra(startNode, endNode, COST_LEAST_STEEP, exempt);
@@ -696,7 +700,7 @@ function drawRoute(startEnt, endEnt) {
   const e = entranceNode(endEnt);
   if (s == null || e == null) return null;
 
-  const r = findRoute(s, e, !isPlace(startEnt), !isPlace(endEnt));
+  const r = findRoute(s, e);
   if (routeLayer) { map.removeLayer(routeLayer); routeLayer = null; }
   if (!r) return null;
 
@@ -763,8 +767,7 @@ BF_DATA.entrances.features.forEach(f => {
   const p = f.properties;
   const bid = p.entrance_id.split('-')[0];   // 출입구 ID 앞부분(B02)으로 건물 찾기
   const ename = (p.name || p.entrance_id).trim();
-  // 특정 장소는 장소 이름만 (예: 정문 동쪽), 건물 출입구는 '건물 - 출입구'
-  ENT_LABELS[p.entrance_id] = isPlace(p.entrance_id) ? ename : `${BLD_NAME[bid] || bid} - ${ename}`;
+  ENT_LABELS[p.entrance_id] = `${BLD_NAME[bid] || bid} - ${ename}`;
 });
 
 // ===== 길찾기: 지도에서 출입구를 눌러 출발·도착 선택 =====
@@ -781,16 +784,9 @@ NET_ENTRANCES.features.forEach((f) => {
   const id = f.properties.entranceID;
   const g = f.geometry;
   const [lng, lat] = g.type === "MultiPoint" ? g.coordinates[0] : g.coordinates;
-  // 건물 출입구는 하얀 동그라미, 특정 장소(정문·후문 등)는 남색 네모
-  const size = DOT_R * 2 + 2;
-  const m = isPlace(id)
-    ? L.marker([lat, lng], {
-        pane: "routePick", keyboard: false,
-        icon: L.divIcon({ className: "pick-sq", iconSize: [size, size], iconAnchor: [size / 2, size / 2] }),
-      })
-    : L.circleMarker([lat, lng], {
-        pane: "routePick", radius: DOT_R, color: "#1C4A86", weight: DOT_R > 8 ? 3.5 : 2.5, fillColor: "#fff", fillOpacity: 1, className: "pick-dot",
-      });
+  const m = L.circleMarker([lat, lng], {
+    pane: "routePick", radius: DOT_R, color: "#1C4A86", weight: DOT_R > 8 ? 3.5 : 2.5, fillColor: "#fff", fillOpacity: 1, className: "pick-dot",
+  });
   m.bindTooltip(esc(entLabel(id)), { direction: "top", offset: [0, -8] });   // 길찾기에서만 출입구 이름 표시
   m.on("click", () => choose(id, [lat, lng]));
   PICK_MARKERS[id] = m;
@@ -806,7 +802,7 @@ function showPicks(ids) {
 }
 
 // 같은 건물 출입구끼리 경로 추천을 허용하는 건물 (출입구 ID 앞부분 기준)
-const SAME_BLDG_OK = new Set(["B05", "B07", PLACE_BLD]);   // 5호관, 학생회관(비룡플라자), 특정 장소끼리
+const SAME_BLDG_OK = new Set(["B05", "B07"]);   // 5호관, 학생회관(비룡플라자)
 const bldOf = (id) => id.split("-")[0];
 let notice = "";   // 패널에 잠깐 띄울 안내 문구
 
@@ -881,7 +877,7 @@ function render() {
   if (!pickStart || !pickEnd) {
     showPicks(null);   // 고르는 중에는 출입구 전부 표시
     if (notice) { rpResult.innerHTML = `<span class="rp-warn">${notice}</span>`; return; }
-    rpResult.textContent = pickStart ? "도착할 출입구나 장소를 지도에서 누르세요." : "출발할 출입구나 장소를 지도에서 누르세요.";
+    rpResult.textContent = pickStart ? "도착할 출입구를 지도에서 누르세요." : "출발할 출입구를 지도에서 누르세요.";
     return;
   }
 
@@ -898,7 +894,6 @@ function render() {
 
   // 출입구 경사도 안내: 기준충족은 값만, 완화기준은 (완화기준), 기준초과는 (주의)
   const rampLine = (label, entId) => {
-    if (isPlace(entId)) return "";   // 정문·후문 등은 출입구 경사로가 없으므로 생략
     const deg = RAMP_DEG[entId];
     const c = rampClass(deg);
     if (!c) return `${label} 출입구 경사도 : 미측정`;
@@ -912,10 +907,7 @@ function render() {
     (steep.length
       ? `<span class="rp-warn">급경사를 피할 수 없는 경로입니다<br>급경사 구간 ${steep.length}곳 (${Math.round(steepLen)}m)</span>`
       : "급경사 구간 없음") +
-    (() => {
-      const lines = [rampLine("출발", pickStart.id), rampLine("도착", pickEnd.id)].filter(Boolean);
-      return lines.length ? `<div class="rp-ramp">${lines.join("<br>")}</div>` : "";
-    })();
+    `<div class="rp-ramp">${rampLine("출발", pickStart.id)}<br>${rampLine("도착", pickEnd.id)}</div>`;
 }
 
 function openRoute() {
