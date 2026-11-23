@@ -255,7 +255,7 @@
   /* ===================== 안뇽이와 인덕이: 사용 안내 ===================== */
   .tour-launch {
     position: fixed; z-index: 1050; left: 12px; bottom: calc(var(--dock-h, 0px) + 12px);
-    width: calc(var(--ui) * 76px); padding: 0; border: 0; border-radius: 12px;
+    width: calc(var(--ui) * 110px); padding: 0; border: 0; border-radius: 12px;
     background: transparent; box-shadow: none; cursor: pointer;
   }
   /* 배경 없이 캐릭터 윤곽에만 그림자 → 항공영상 위에서도 잘 보이게 */
@@ -266,25 +266,28 @@
   .tour { position: fixed; inset: 0; z-index: 3000; cursor: pointer; }
   .tour[hidden] { display: none; }
   .tour-mask { position: absolute; inset: 0; width: 100%; height: 100%; }
-  .tour-intro { position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%); width: min(92vw, calc(var(--ui) * 360px)); text-align: center; color: #fff; pointer-events: none; }
-  .tour-intro-main { margin: 0; font-weight: 800; font-size: calc(var(--ui) * 20px); line-height: 1.5; text-shadow: 0 2px 8px rgba(0,0,0,.6); word-break: keep-all; }
-  .tour-intro-sub { margin: calc(var(--ui) * 10px) 0 0; font-size: calc(var(--ui) * 13px); opacity: .9; }
+  .tour-intro { position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%); width: min(92vw, calc(var(--ui) * 440px)); text-align: center; color: #fff; pointer-events: none; }
+  .tour-intro-main { margin: 0; font-weight: 800; font-size: calc(var(--ui) * 26px); line-height: 1.5; text-shadow: 0 2px 8px rgba(0,0,0,.6); word-break: keep-all; }
+  .tour-intro-sub { margin: calc(var(--ui) * 10px) 0 0; font-size: calc(var(--ui) * 16px); opacity: .9; }
   .tour.intro .tour-card, .tour:not(.intro) .tour-intro { display: none; }
   .tour-card {
-    position: absolute; left: 50%; transform: translateX(-50%); width: min(92vw, calc(var(--ui) * 330px));
+    position: absolute; left: 50%; transform: translateX(-50%); width: min(92vw, calc(var(--ui) * 400px));
     display: flex; gap: calc(var(--ui) * 10px); align-items: flex-end; cursor: default;
     background: #fff; border-radius: 14px; padding: calc(var(--ui) * 12px); box-shadow: 0 6px 22px rgba(0,0,0,.45);
   }
-  .tour-char { width: calc(var(--ui) * 66px); flex: none; }
+  .tour-char { width: calc(var(--ui) * 90px); flex: none; }
   .tour-body { flex: 1; min-width: 0; }
-  .tour-text { margin: 0 0 calc(var(--ui) * 10px); font-size: calc(var(--ui) * 14px); line-height: 1.55; word-break: keep-all; }
+  .tour-text { margin: 0 0 calc(var(--ui) * 10px); font-size: calc(var(--ui) * 17px); line-height: 1.55; word-break: keep-all; }
   .tour-text b { color: var(--inha); }
   .tour-foot { display: flex; align-items: center; gap: calc(var(--ui) * 6px); }
-  .tour-step { flex: 1; color: var(--muted); font-size: calc(var(--ui) * 12px); }
+  .tour-step { flex: 1; color: var(--muted); font-size: calc(var(--ui) * 14px); }
   .tour-foot button { border-radius: 8px; padding: calc(var(--ui) * 5px) calc(var(--ui) * 10px); font: 700 calc(var(--ui) * 12.5px) Pretendard, "Malgun Gothic", sans-serif; cursor: pointer; }
   .tour-skip { border: 1.5px solid var(--line); background: #fff; color: var(--muted); }
   .tour-next { border: 0; background: var(--inha); color: #fff; }
   .tour-foot button:focus-visible { outline: 3px solid var(--flash); outline-offset: 2px; }
+  .tour-foot button { border-radius: 10px; padding: calc(var(--ui) * 8px) calc(var(--ui) * 14px); font: 700 calc(var(--ui) * 15px) Pretendard, "Malgun Gothic", sans-serif; cursor: pointer; }
+  .tour-prev { border: 1.5px solid var(--inha); background: #fff; color: var(--inha); }
+  .tour-prev:disabled { opacity: .35; cursor: default; }
 
   /* 기능별 팝업 좌상단에 안뇽이와 인덕이 (판을 붙잡은 모습) */
   .legend { position: relative; }
@@ -341,6 +344,7 @@
       <div class="tour-foot">
         <span class="tour-step"></span>
         <button type="button" class="tour-skip">건너뛰기</button>
+        <button type="button" class="tour-prev">이전</button>
         <button type="button" class="tour-next">다음</button>
       </div>
     </div>
@@ -436,6 +440,8 @@ console.info("[배리어프리맵] 휴대폰·아이패드 통합 2026-11-23 버
 // 접속 주소별 브이월드 인증키 (같은 파일을 GitHub Pages와 로컬 Live Server 양쪽에서 사용)
 const VWORLD_KEYS = {
   "money710.github.io": "1E88965C-58D6-4447-BA2A-6141E9DA18ED",   // GitHub Pages용
+  "127.0.0.1": "CCB91FDC-C11C-4881-B9C8-101098589100",            // 로컬용 (VS Code Live Server)
+  "localhost": "CCB91FDC-C11C-4881-B9C8-101098589100",            // 로컬용
 };
 const VWORLD_KEY = VWORLD_KEYS[location.hostname];
 const vwUrl = (layer, ext) => `https://api.vworld.kr/req/wmts/1.0.0/${VWORLD_KEY}/${layer}/{z}/{y}/{x}.${ext}`;
@@ -1137,26 +1143,27 @@ const tourCard = tourEl.querySelector(".tour-card");
 const tourText = tourEl.querySelector(".tour-text");
 const tourStepEl = tourEl.querySelector(".tour-step");
 const tourNext = tourEl.querySelector(".tour-next");
+const tourPrev = tourEl.querySelector(".tour-prev");
 const launchBtn = document.getElementById("tour-launch");
 const $ = (sel) => document.querySelector(sel);
 
 const TOUR_STEPS = [
-  { text: "<b>배경 지도</b>를 선택할 수 있어요!<br>항공영상과 일반지도 중 자유롭게 선택하세요.",
+  { text: "상단 버튼으로 <b>배경 지도</b>를 선택할 수 있어요!<br>항공영상과 일반지도 중 자유롭게 선택하세요.",
     run: () => offOthers(""), targets: () => [$(".basemap")] },
-  { text: "<b>건물을 누르세요!</b><br>건물별로 화장실 위치와 엘리베이터, 주차장, 출입구 정보를 확인할 수 있어요.",
+  { text: "화면에서 <b>건물</b>을 눌러보세요!<br>건물 내부 화장실 위치와 엘리베이터, 주차장, 출입구 정보를 확인할 수 있어요.",
     run: () => {
       offOthers("");
       const id = B.B02 ? "B02" : Object.keys(B)[0];
       if (id) { selected = id; refreshLit(); B[id].layer.openPopup(); }
     },
     targets: () => [$(".leaflet-popup")] },
-  { text: "<b>진입 가능 출입구</b>가 표시돼요!<br>출입문 종류를 누르면 출입구를 끄고 켤 수 있어요.",
+  { text: "<b>진입 가능 출입구</b>가 표시돼요!<br>출입문 종류를 누르면 출입구를 끄고 켤 수 있어요.<br><b>출입구</b>를 눌러보세요!<br>출입구 정보도 확인할 수 있어요.",
     run: () => { offOthers("ent"); setEnt(true); }, targets: () => [btnEnt, legend] },
-  { text: "화면에서 <b>출발지와 도착지</b>를 선택하세요!<br>경사도 높은 길을 우회하는 경로를 제공해요. 경사 구간 정보도 알려드리니 이동할 때 꼭 참고하세요.",
+  { text: "화면에서 <b>출발지</b>와 <b>도착지</b>를 선택하세요!<br>경사도 높은 길을 우회하는 경로를 제공해요. 경사 구간 정보도 알려드리니 이동할 때 꼭 참고하세요!",
     run: () => openRoute(), targets: () => [btnRoute, routePanel] },
   { text: "<b>배리어프리 시설</b>이 있는 건물이 화면에 표시돼요!<br>시설을 선택해서 건물들을 확인하세요.",
     run: () => { offOthers("wc"); setWc(true); }, targets: () => [btnWc, facLegend] },
-  { text: "교내 길의 <b>경사도</b>를 확인할 수 있어요!<br>학교에서 경사도 높은 길을 주의하세요.",
+  { text: "교내 길 <b>경사도</b>를 확인할 수 있어요!<br>학교에서 경사도 높은 길을 주의하세요!",
     run: () => { offOthers("slope"); setSlope(true); }, targets: () => [btnSlope, slopeLegend] },
 ];
 let tourIdx = -1;   // -1: 처음 안내, 0~: 기능 안내 단계
@@ -1197,6 +1204,7 @@ function showTourStep(i) {
   tourText.innerHTML = st.text;
   tourStepEl.textContent = `${i + 1} / ${TOUR_STEPS.length}`;
   tourNext.textContent = i === TOUR_STEPS.length - 1 ? "시작하기" : "다음";
+  tourPrev.disabled = i === 0;
   st.run();
   renderTour();
 }
@@ -1224,6 +1232,7 @@ tourEl.addEventListener("click", (e) => {
   tourIdx < TOUR_STEPS.length - 1 ? showTourStep(tourIdx + 1) : endTour();
 });
 tourNext.addEventListener("click", (e) => { e.stopPropagation(); tourIdx < TOUR_STEPS.length - 1 ? showTourStep(tourIdx + 1) : endTour(); });
+tourPrev.addEventListener("click", (e) => { e.stopPropagation(); if (tourIdx > 0) showTourStep(tourIdx - 1); });
 tourEl.querySelector(".tour-skip").addEventListener("click", (e) => { e.stopPropagation(); endTour(); });
 launchBtn.addEventListener("click", startTour);
 window.addEventListener("resize", () => { if (!tourEl.hidden) renderTour(); });
