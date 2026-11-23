@@ -413,7 +413,7 @@ const BaseControl = L.Control.extend({
     const box = L.DomUtil.create("div", "basemap");
     box.setAttribute("role", "group");
     box.setAttribute("aria-label", "배경지도 선택");
-    [["sat", "위성영상"], ["base", "일반지도"], ["hybrid", "위성영상<br>+ 일반지도"]].forEach(([k, label]) => {
+    [["sat", "위성영상"], ["base", "일반지도"]].forEach(([k, label]) => {
       const b = L.DomUtil.create("button", "", box);
       b.type = "button"; b.dataset.key = k; b.innerHTML = label;
       b.setAttribute("aria-pressed", "false");
