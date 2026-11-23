@@ -1163,7 +1163,7 @@ const TOUR_STEPS = [
     run: () => openRoute(), targets: () => [btnRoute, routePanel] },
   { text: "<b>배리어프리 시설</b>이 있는 건물이 화면에 표시돼요!<br>시설을 선택해서 건물들을 확인하세요.",
     run: () => { offOthers("wc"); setWc(true); }, targets: () => [btnWc, facLegend] },
-  { text: "교내 길 <b>경사도</b>를 확인할 수 있어요!<br>학교에서 경사도 높은 길을 주의하세요!",
+  { text: "교내 길 <b>경사 등급</b>을 확인할 수 있어요!<br>길을 누르면 길의 경사도를 확인할 수 있어요. 학교에서 경사 높은 길을 주의하세요!",
     run: () => { offOthers("slope"); setSlope(true); }, targets: () => [btnSlope, slopeLegend] },
 ];
 let tourIdx = -1;   // -1: 처음 안내, 0~: 기능 안내 단계
