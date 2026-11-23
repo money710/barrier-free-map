@@ -360,7 +360,7 @@ fitCampus();
 window.addEventListener("load", () => setTimeout(() => fitCampus(), 100));
 console.info("[배리어프리맵] 휴대폰·아이패드 통합 2026-11-19 버전");   // 휴대폰에 새 파일이 반영됐는지 확인용
 
-// ===== 배경지도 (우상단에서 선택: 위성영상 / 일반지도 / 위성영상+일반지도) =====
+// ===== 배경지도 (우상단에서 선택: 항공영상 / 일반지도 / 항공영상+일반지도) =====
 // 브이월드 인증키: 등록한 주소(money710.github.io)에서만 동작 → 그 외(로컬 테스트 등)에서는 Esri·OSM으로 대신 표시
 const VWORLD_KEY = "1E88965C-58D6-4447-BA2A-6141E9DA18ED";
 const VWORLD_HOSTS = ["money710.github.io"];   // 브이월드에 등록한 서비스 주소
@@ -373,7 +373,7 @@ const ESRI_SAT = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Ima
 const ESRI_LABEL = "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}";
 const OSM = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 
-// 각 배경지도를 이루는 타일 레이어 (위성영상+일반지도 = 위성영상 위에 지명·도로명 라벨)
+// 각 배경지도를 이루는 타일 레이어 (항공영상+일반지도 = 항공영상 위에 지명·도로명 라벨)
 function baseLayers(key) {
   if (useVworld) {
     if (key === "sat")  return [L.tileLayer(vwUrl("Satellite", "jpeg"), { ...TILE_OPT, attribution: VW_ATTR })];
@@ -385,7 +385,7 @@ function baseLayers(key) {
   return [L.tileLayer(ESRI_SAT, { ...TILE_OPT, attribution: "Imagery &copy; Esri" }), L.tileLayer(ESRI_LABEL, TILE_OPT)];
 }
 
-let baseKey = "hybrid";   // 처음 화면: 위성영상 + 일반지도
+let baseKey = "hybrid";   // 처음 화면: 항공영상 + 일반지도
 let baseNow = [];
 function setBase(key) {
   baseKey = key;
@@ -413,7 +413,7 @@ const BaseControl = L.Control.extend({
     const box = L.DomUtil.create("div", "basemap");
     box.setAttribute("role", "group");
     box.setAttribute("aria-label", "배경지도 선택");
-    [["sat", "위성영상"], ["base", "일반지도"]].forEach(([k, label]) => {
+    [["sat", "항공영상"], ["base", "일반지도"]].forEach(([k, label]) => {
       const b = L.DomUtil.create("button", "", box);
       b.type = "button"; b.dataset.key = k; b.innerHTML = label;
       b.setAttribute("aria-pressed", "false");
