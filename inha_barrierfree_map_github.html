@@ -19,11 +19,11 @@
 </script>
 <style>
   :root {
-    --inha: #1C4A86;      /* 인하 블루 */
+    --inha: #005bac;      /* 인하 블루 */
     --ink: #1E2530;
     --muted: #6B7685;
     --line: #E3E7EC;
-    --flash: #FFD400;     /* 반짝이는 경계 (PPT의 노란 테두리) */
+    --flash: #00afec;     /* 반짝이는 경계 (PPT의 노란 테두리) */
     --ok: #1F8A5B;        /* 휠체어 진입 가능 */
     --limited: #C98A00;   /* 제한적 */
     --warn: #C8372D;      /* 주의사항 */
@@ -37,12 +37,13 @@
   #map { position: fixed; inset: 0; background: #2b2f33; }
 
   /* 좌상단 제목 */
+
   .title {
     position: fixed; z-index: 1000; left: 14px; top: calc(14px + env(safe-area-inset-top, 0px));
     background: var(--inha); color: #fff; padding: calc(var(--ui) * 9px) calc(var(--ui) * 14px); border-radius: 10px;
     font-weight: 700; font-size: calc(var(--ui) * 17px); letter-spacing: -0.02em; box-shadow: 0 2px 8px rgba(0,0,0,.3);
   }
-
+  
   /* 하단 메뉴바: 버튼 3개를 나란히 */
   .dock {
     position: fixed; z-index: 1000; left: 0; right: 0; bottom: 0;
@@ -222,7 +223,7 @@
   .basemap button[aria-pressed="true"] { background: var(--inha); border-color: var(--inha); color: #fff; }
   .basemap button:focus-visible { outline: 3px solid var(--flash); outline-offset: 2px; }
   /* 특정 장소(정문·후문·쪽문·운동장·인경호 등): 남색 네모 */
-  .pick-sq { background: #1F2A5C; border: 2.5px solid #fff; border-radius: 3px; box-shadow: 0 0 0 1px rgba(0,0,0,.35), 0 1px 4px rgba(0,0,0,.4); cursor: pointer; }
+  .pick-sq { background: #005BAC; border: 2.5px solid #fff; border-radius: 3px; box-shadow: 0 0 0 1px rgba(0,0,0,.35), 0 1px 4px rgba(0,0,0,.4); cursor: pointer; }
   /* 길찾기 중에는 건물을 눌러도 반응하지 않음 */
   .route-mode .bld-shape, .route-mode .bld-icon { pointer-events: none !important; }
 
@@ -250,6 +251,49 @@
   button, .chip, .pick-dot, .pick-sq, .basemap button { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
   .dock > button:active, .legend .chip:active, .rp-swap:active, .rp-actions button:active { transform: scale(.97); }
   html, body { overscroll-behavior: none; }   /* 지도 끌 때 화면 전체가 튕기지 않게 */
+
+  /* ===================== 안뇽이와 인덕이: 사용 안내 ===================== */
+  .tour-launch {
+    position: fixed; z-index: 1050; left: 12px; bottom: calc(var(--dock-h, 0px) + 12px);
+    width: calc(var(--ui) * 76px); padding: 0; border: 0; border-radius: 12px;
+    background: transparent; box-shadow: none; cursor: pointer;
+  }
+  /* 배경 없이 캐릭터 윤곽에만 그림자 → 항공영상 위에서도 잘 보이게 */
+  .tour-launch img { display: block; width: 100%; height: auto; filter: drop-shadow(0 2px 4px rgba(0,0,0,.45)); }
+  /* 다른 기능의 범례·길찾기 창이 열려 있으면 안내 버튼은 잠시 숨김 (겹치지 않게) */
+  body:has(.legend.on) .tour-launch, body:has(.route-panel.open) .tour-launch { display: none; }
+  .tour-launch:focus-visible { outline: 3px solid var(--flash); outline-offset: 2px; }
+  .tour { position: fixed; inset: 0; z-index: 3000; cursor: pointer; }
+  .tour[hidden] { display: none; }
+  .tour-mask { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .tour-intro { position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%); width: min(92vw, calc(var(--ui) * 360px)); text-align: center; color: #fff; pointer-events: none; }
+  .tour-intro-main { margin: 0; font-weight: 800; font-size: calc(var(--ui) * 20px); line-height: 1.5; text-shadow: 0 2px 8px rgba(0,0,0,.6); word-break: keep-all; }
+  .tour-intro-sub { margin: calc(var(--ui) * 10px) 0 0; font-size: calc(var(--ui) * 13px); opacity: .9; }
+  .tour.intro .tour-card, .tour:not(.intro) .tour-intro { display: none; }
+  .tour-card {
+    position: absolute; left: 50%; transform: translateX(-50%); width: min(92vw, calc(var(--ui) * 330px));
+    display: flex; gap: calc(var(--ui) * 10px); align-items: flex-end; cursor: default;
+    background: #fff; border-radius: 14px; padding: calc(var(--ui) * 12px); box-shadow: 0 6px 22px rgba(0,0,0,.45);
+  }
+  .tour-char { width: calc(var(--ui) * 66px); flex: none; }
+  .tour-body { flex: 1; min-width: 0; }
+  .tour-text { margin: 0 0 calc(var(--ui) * 10px); font-size: calc(var(--ui) * 14px); line-height: 1.55; word-break: keep-all; }
+  .tour-text b { color: var(--inha); }
+  .tour-foot { display: flex; align-items: center; gap: calc(var(--ui) * 6px); }
+  .tour-step { flex: 1; color: var(--muted); font-size: calc(var(--ui) * 12px); }
+  .tour-foot button { border-radius: 8px; padding: calc(var(--ui) * 5px) calc(var(--ui) * 10px); font: 700 calc(var(--ui) * 12.5px) Pretendard, "Malgun Gothic", sans-serif; cursor: pointer; }
+  .tour-skip { border: 1.5px solid var(--line); background: #fff; color: var(--muted); }
+  .tour-next { border: 0; background: var(--inha); color: #fff; }
+  .tour-foot button:focus-visible { outline: 3px solid var(--flash); outline-offset: 2px; }
+
+  /* 기능별 팝업 좌상단에 안뇽이와 인덕이 (판을 붙잡은 모습) */
+  .legend { position: relative; }
+  .route-panel::before, .legend::before {
+    content: ""; position: absolute; pointer-events: none;
+    left: calc(var(--ui) * 10px); top: calc(var(--ui) * -43.3px);
+    width: calc(var(--ui) * 72px); height: calc(var(--ui) * 47.7px);
+    background: url("img/peek.png") 0 0 / 100% 100% no-repeat;
+  }
 </style>
 </head>
 <body>
@@ -276,6 +320,33 @@
 </nav>
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<!-- 사용 안내: 왼쪽 아래 안뇽이와 인덕이를 누르면 기능별 안내 -->
+<button type="button" id="tour-launch" class="tour-launch" aria-label="안뇽이와 인덕이의 사용 안내 보기">
+  <img src="img/miso_pair.png">
+</button>
+<div id="tour" class="tour" hidden>
+  <svg class="tour-mask" aria-hidden="true">
+    <defs><mask id="tour-holes-mask"><rect width="100%" height="100%" fill="#fff"/><g id="tour-holes"></g></mask></defs>
+    <rect width="100%" height="100%" fill="rgba(10,16,28,.66)" mask="url(#tour-holes-mask)"/>
+  </svg>
+  <div class="tour-intro" role="dialog" aria-label="처음 안내">
+    <p class="tour-intro-main">인하대학교 배리어프리 지도입니다<br>자세한 안내를 원하시면<br>안뇽이와 인덕이를 눌러주세요!</p>
+    <p class="tour-intro-sub">(안내를 원하지 않으면 빈 곳을 눌러주세요)</p>
+  </div>
+  <div class="tour-card" role="dialog" aria-live="polite">
+    
+    <div class="tour-body">
+      <p class="tour-text"></p>
+      <div class="tour-foot">
+        <span class="tour-step"></span>
+        <button type="button" class="tour-skip">건너뛰기</button>
+        <button type="button" class="tour-next">다음</button>
+      </div>
+    </div>
+    <img class="tour-char" src="img/annae_pair.png" alt="">
+  </div>
+</div>
 
 <script>
 // data.js를 못 불러왔을 때 안내
@@ -322,11 +393,11 @@ function rampRow(entId, fallback) {
 }
 
 const DOOR_COLORS = {
-  automatic: "#29B6F6",  // 자동문: 하늘색
-  hinged:    "#EC4899",  // 여닫이: 핑크
-  sliding:   "#8B5CF6",  // 미닫이: 보라
+  automatic: "#99E6FF",  // 자동문: 안뇽이 하늘색
+  hinged:    "#FFCC26",  // 여닫이: 인덕이 노란색
+  sliding:   "#FFABb3",  // 미닫이: 안뇽이 볼터치 핑크색
   revolving: "#14B8A6",  // 회전문: 청록
-  no:        "#475569",  // 문 없음: 진회색
+  no:        "#475569",  // 문 없음: 진회색 
   unknown:   "#9CA3AF",  // 미조사: 연회색
 };
 
@@ -358,34 +429,36 @@ function fitCampus(bottomPanel) {
 fitCampus();
 // 글꼴·화면 크기가 다 정해진 뒤 한 번 더 맞춤 (휴대폰 주소창 때문에 높이가 바뀌는 경우 대비)
 window.addEventListener("load", () => setTimeout(() => fitCampus(), 100));
-console.info("[배리어프리맵] 휴대폰·아이패드 통합 2026-11-19 버전");   // 휴대폰에 새 파일이 반영됐는지 확인용
+console.info("[배리어프리맵] 휴대폰·아이패드 통합 2026-11-23 버전 (사용 안내 포함)");   // 휴대폰에 새 파일이 반영됐는지 확인용
 
-// ===== 배경지도 (우상단에서 선택: 항공영상 / 일반지도 / 항공영상+일반지도) =====
-// 브이월드 인증키: 등록한 주소(money710.github.io)에서만 동작 → 그 외(로컬 테스트 등)에서는 Esri·OSM으로 대신 표시
-const VWORLD_KEY = "1E88965C-58D6-4447-BA2A-6141E9DA18ED";
-const VWORLD_HOSTS = ["money710.github.io"];   // 브이월드에 등록한 서비스 주소
+// ===== 배경지도 (우상단에서 선택: 항공영상 / 일반지도) =====
+// 브이월드 인증키는 키마다 등록한 주소에서만 동작 → 아래 표에 없는 주소에서는 Esri 항공영상·OSM으로 대신 표시
+// 접속 주소별 브이월드 인증키 (같은 파일을 GitHub Pages와 로컬 Live Server 양쪽에서 사용)
+const VWORLD_KEYS = {
+  "money710.github.io": "1E88965C-58D6-4447-BA2A-6141E9DA18ED",   // GitHub Pages용
+  "127.0.0.1": "CCB91FDC-C11C-4881-B9C8-101098589100",            // 로컬용 (VS Code Live Server)
+  "localhost": "CCB91FDC-C11C-4881-B9C8-101098589100",            // 로컬용
+};
+const VWORLD_KEY = VWORLD_KEYS[location.hostname];
 const vwUrl = (layer, ext) => `https://api.vworld.kr/req/wmts/1.0.0/${VWORLD_KEY}/${layer}/{z}/{y}/{x}.${ext}`;
-let useVworld = VWORLD_HOSTS.includes(location.hostname);
+let useVworld = !!VWORLD_KEY;   // 등록된 주소가 아니면(파일 더블클릭 등) Esri·OSM 사용
 
 const TILE_OPT = { maxZoom: 20, maxNativeZoom: 19 };
 const VW_ATTR = "&copy; 국토교통부 브이월드";
 const ESRI_SAT = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
-const ESRI_LABEL = "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}";
 const OSM = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 
-// 각 배경지도를 이루는 타일 레이어 (항공영상+일반지도 = 항공영상 위에 지명·도로명 라벨)
+// 각 배경지도를 이루는 타일 레이어 (aerial = 항공영상, base = 일반지도)
 function baseLayers(key) {
   if (useVworld) {
-    if (key === "sat")  return [L.tileLayer(vwUrl("Satellite", "jpeg"), { ...TILE_OPT, attribution: VW_ATTR })];
     if (key === "base") return [L.tileLayer(vwUrl("Base", "png"), { ...TILE_OPT, attribution: VW_ATTR })];
-    return [L.tileLayer(vwUrl("Satellite", "jpeg"), { ...TILE_OPT, attribution: VW_ATTR }), L.tileLayer(vwUrl("Hybrid", "png"), TILE_OPT)];
+    return [L.tileLayer(vwUrl("Satellite", "jpeg"), { ...TILE_OPT, attribution: VW_ATTR })];   // 브이월드 항공영상
   }
-  if (key === "sat")  return [L.tileLayer(ESRI_SAT, { ...TILE_OPT, attribution: "Imagery &copy; Esri" })];
   if (key === "base") return [L.tileLayer(OSM, { ...TILE_OPT, attribution: "&copy; OpenStreetMap" })];
-  return [L.tileLayer(ESRI_SAT, { ...TILE_OPT, attribution: "Imagery &copy; Esri" }), L.tileLayer(ESRI_LABEL, TILE_OPT)];
+  return [L.tileLayer(ESRI_SAT, { ...TILE_OPT, attribution: "Imagery &copy; Esri" })];
 }
 
-let baseKey = "hybrid";   // 처음 화면: 항공영상 + 일반지도
+let baseKey = "aerial";   // 처음 화면: 항공영상 (버튼의 data-key와 같은 값이어야 버튼이 선택 표시됨)
 let baseNow = [];
 function setBase(key) {
   baseKey = key;
@@ -413,7 +486,7 @@ const BaseControl = L.Control.extend({
     const box = L.DomUtil.create("div", "basemap");
     box.setAttribute("role", "group");
     box.setAttribute("aria-label", "배경지도 선택");
-    [["sat", "항공영상"], ["base", "일반지도"]].forEach(([k, label]) => {
+    [["aerial", "항공영상"], ["base", "일반지도"]].forEach(([k, label]) => {
       const b = L.DomUtil.create("button", "", box);
       b.type = "button"; b.dataset.key = k; b.innerHTML = label;
       b.setAttribute("aria-pressed", "false");
@@ -456,9 +529,9 @@ let wcOn = false;      // '배리어프리 시설 정보' 버튼 상태
 let facSel = null;     // 고른 시설 (wc / elev / park)
 // 배리어프리 시설: 이름, 색, 이 건물에 있는지 판단하는 방법
 const FACILITIES = {
-  wc:   { label: "장애인 화장실", color: "#29B6F6", has: (p) => p.restroom_count > 0 },          // 하늘
-  elev: { label: "엘리베이터",   color: "#EC4899", has: (p) => p.elevator === "yes" },          // 핑크
-  park: { label: "장애인 주차장", color: "#8B5CF6", has: (p) => p.parking === "yes" || p.parking_count > 0 },   // 보라
+  wc:   { label: "장애인 화장실", color: "#99E6FF", has: (p) => p.restroom_count > 0 },          //  안뇽이 하늘색
+  elev: { label: "엘리베이터",   color: "#FFA6B3", has: (p) => p.elevator === "yes" },          // 안뇽이 볼터치 핑크색
+  park: { label: "장애인 주차장", color: "#FFCC26", has: (p) => p.parking === "yes" || p.parking_count > 0 },   // 인덕이 노란색
 };
 
 // 장애인 주차장: 있음(n대) / 있음(대수 미조사) / 없음 / 미조사
@@ -1057,6 +1130,109 @@ function offOthers(keep) {
   if (selected) { selected = null; refreshLit(); }   // 선택했던 건물 강조도 해제
   document.querySelectorAll(".bld-shape, .bld-tag").forEach((el) => stopBlink(el));
 }
+
+// ===================== 안뇽이와 인덕이: 사용 안내 =====================
+// 접속하면 처음 안내 → 안뇽이와 인덕이를 누르면 기능별 안내 (배경은 어둡게, 설명하는 버튼·팝업만 밝게)
+const tourEl = document.getElementById("tour");
+const tourHoles = document.getElementById("tour-holes");
+const tourCard = tourEl.querySelector(".tour-card");
+const tourText = tourEl.querySelector(".tour-text");
+const tourStepEl = tourEl.querySelector(".tour-step");
+const tourNext = tourEl.querySelector(".tour-next");
+const launchBtn = document.getElementById("tour-launch");
+const $ = (sel) => document.querySelector(sel);
+
+const TOUR_STEPS = [
+  { text: "<b>진입 가능 출입구</b>가 표시돼요!<br>출입문 종류를 누르면 출입구를 끄고 켤 수 있어요.",
+    run: () => { offOthers("ent"); setEnt(true); }, targets: () => [btnEnt, legend] },
+  { text: "<b>배경 지도</b>를 선택할 수 있어요!<br>항공영상과 일반지도 중 자유롭게 선택하세요.",
+    run: () => offOthers(""), targets: () => [$(".basemap")] },
+  { text: "<b>건물을 누르세요!</b><br>건물별로 화장실 위치와 엘리베이터, 주차장, 출입구 정보를 확인할 수 있어요.",
+    run: () => {
+      offOthers("");
+      const id = B.B02 ? "B02" : Object.keys(B)[0];
+      if (id) { selected = id; refreshLit(); B[id].layer.openPopup(); }
+    },
+    targets: () => [$(".leaflet-popup")] },
+  { text: "화면에서 <b>출발지와 도착지</b>를 선택하세요!<br>경사도 높은 길을 우회하는 경로를 제공해요. 경사 구간 정보도 알려드리니 이동할 때 꼭 참고하세요.",
+    run: () => openRoute(), targets: () => [btnRoute, routePanel] },
+  { text: "<b>배리어프리 시설</b>이 있는 건물이 화면에 표시돼요!<br>시설을 선택해서 건물들을 확인하세요.",
+    run: () => { offOthers("wc"); setWc(true); }, targets: () => [btnWc, facLegend] },
+  { text: "교내 길의 <b>경사도</b>를 확인할 수 있어요!<br>학교에서 경사도 높은 길을 주의하세요.",
+    run: () => { offOthers("slope"); setSlope(true); }, targets: () => [btnSlope, slopeLegend] },
+];
+let tourIdx = -1;   // -1: 처음 안내, 0~: 기능 안내 단계
+
+// 밝게 보여줄 곳(구멍) 그리기
+function drawHoles(els) {
+  const pad = 6;
+  els = els.filter((el) => el && el.getClientRects().length > 0);   // 화면에 보이는 것만
+  const ui = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--ui")) || 1;
+  tourHoles.innerHTML = els.map((el) => {
+    const r = el.getBoundingClientRect();
+    const peek = el.matches(".legend, .route-panel") ? 44 * ui : 0;   // 좌상단 안뇽이·인덕이까지 밝게
+    return `<rect x="${r.left - pad}" y="${r.top - pad - peek}" width="${r.width + pad * 2}" height="${r.height + pad * 2 + peek}" rx="14" fill="#000"/>`;
+  }).join("");
+  return els.map((el) => el.getBoundingClientRect());
+}
+// 설명 상자 위치: 밝게 보여주는 곳이 화면 아래쪽이면 위에, 위쪽이면 아래에
+function placeCard(rects) {
+  const top = Math.min(...rects.map((r) => r.top)), bottom = Math.max(...rects.map((r) => r.bottom));
+  const mid = (top + bottom) / 2;
+  tourCard.style.top = tourCard.style.bottom = "";
+  if (mid > window.innerHeight / 2) {
+    tourCard.style.top = Math.max($(".title").getBoundingClientRect().bottom + 14, 14) + "px";
+  } else {
+    tourCard.style.bottom = (dockHeight() + 16) + "px";
+  }
+}
+function renderTour() {
+  if (tourIdx < 0) { drawHoles([launchBtn]); return; }
+  const st = TOUR_STEPS[tourIdx];
+  const update = () => placeCard(drawHoles(st.targets()));
+  update(); setTimeout(update, 450);   // 팝업이 열리며 지도가 움직이는 경우 다시 맞춤
+}
+function showTourStep(i) {
+  tourIdx = i;
+  tourEl.classList.remove("intro");
+  const st = TOUR_STEPS[i];
+  tourText.innerHTML = st.text;
+  tourStepEl.textContent = `${i + 1} / ${TOUR_STEPS.length}`;
+  tourNext.textContent = i === TOUR_STEPS.length - 1 ? "시작하기" : "다음";
+  st.run();
+  renderTour();
+}
+function openIntro() {
+  tourIdx = -1;
+  tourEl.hidden = false; tourEl.classList.add("intro");
+  renderTour();
+}
+function endTour() {
+  tourEl.hidden = true;
+  offOthers("");          // 안내하며 켰던 기능 모두 끄기
+  map.closePopup();
+}
+function startTour() { tourEl.hidden = false; showTourStep(0); }
+
+// 어두운 곳을 누르면: 처음 안내에서는 닫기(안뇽이·인덕이를 누른 경우는 안내 시작), 기능 안내에서는 다음 단계
+tourEl.addEventListener("click", (e) => {
+  if (tourIdx < 0) {
+    const r = launchBtn.getBoundingClientRect();
+    const onLaunch = e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+    onLaunch ? startTour() : endTour();
+    return;
+  }
+  if (tourCard.contains(e.target)) return;
+  tourIdx < TOUR_STEPS.length - 1 ? showTourStep(tourIdx + 1) : endTour();
+});
+tourNext.addEventListener("click", (e) => { e.stopPropagation(); tourIdx < TOUR_STEPS.length - 1 ? showTourStep(tourIdx + 1) : endTour(); });
+tourEl.querySelector(".tour-skip").addEventListener("click", (e) => { e.stopPropagation(); endTour(); });
+launchBtn.addEventListener("click", startTour);
+window.addEventListener("resize", () => { if (!tourEl.hidden) renderTour(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !tourEl.hidden) endTour(); });
+
+// 접속하면 처음 안내 띄우기 (지도·버튼 배치가 끝난 뒤)
+window.addEventListener("load", () => setTimeout(openIntro, 300));
 </script>
 </body>
 </html>
