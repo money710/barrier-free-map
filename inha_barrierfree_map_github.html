@@ -1086,7 +1086,7 @@ function render() {
     ? "급경사 구간 없음"
     : r.steepUnavoidable
       ? `<span class="rp-warn">급경사를 피할 수 없는 경로입니다<br>급경사 구간 ${steep.length}곳 (${Math.round(steepLen)}m)</span>`
-      : `<span class="rp-warn">짧은 급경사 구간 ${steep.length}곳 (${Math.round(steepLen)}m) 포함</span><br><small>돌아가는 길이 훨씬 멀어 이 경로로 안내합니다</small>`;
+      : `<span class="rp-warn">짧은 급경사 구간 ${steep.length}곳 (${Math.round(steepLen)}m) 포함</span><br><small>우회경로가 길어 급경사 경로로 안내합니다</small>`;
   rpResult.innerHTML = `거리 <b>${Math.round(r.length)}m</b>, 약 <b>${min}분</b><br>` + steepMsg +
     (() => {
       const lines = [rampLine("출발", pickStart.id), rampLine("도착", pickEnd.id)].filter(Boolean);
