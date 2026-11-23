@@ -208,6 +208,19 @@
   .pin-end { background: var(--ink); }
   .map-pin { transform: translate(-50%, calc(-100% - 6px)); display: inline-block; }
   .pick-dot { cursor: pointer; }
+  /* 우상단 배경지도 선택 */
+  .leaflet-top.leaflet-right { top: env(safe-area-inset-top, 0px); }
+  .basemap {
+    display: flex; gap: calc(var(--ui) * 4px); padding: calc(var(--ui) * 4px);
+    background: rgba(255,255,255,.97); border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,.3);
+  }
+  .basemap button {
+    border: 1.5px solid var(--line); background: #fff; color: var(--ink); border-radius: 7px; cursor: pointer;
+    padding: calc(var(--ui) * 5px) calc(var(--ui) * 9px); line-height: 1.2; text-align: center;
+    font: 600 calc(var(--ui) * 12.5px) Pretendard, "Malgun Gothic", sans-serif; white-space: nowrap;
+  }
+  .basemap button[aria-pressed="true"] { background: var(--inha); border-color: var(--inha); color: #fff; }
+  .basemap button:focus-visible { outline: 3px solid var(--flash); outline-offset: 2px; }
   /* 특정 장소(정문·후문·쪽문·운동장·인경호 등): 남색 네모 */
   .pick-sq { background: #1F2A5C; border: 2.5px solid #fff; border-radius: 3px; box-shadow: 0 0 0 1px rgba(0,0,0,.35), 0 1px 4px rgba(0,0,0,.4); cursor: pointer; }
   /* 길찾기 중에는 건물을 눌러도 반응하지 않음 */
@@ -221,6 +234,7 @@
   /* 휴대폰 세로 */
   @media (max-width: 560px) {
     :root { --ui: 0.95; --ctrl: 1.2; }
+    .basemap { flex-direction: column; }   /* 배경지도 버튼을 세로로 (제목과 안 겹치게) */
     .dock { gap: 6px; padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px)); }
     .dock > button { max-width: none; font-size: 13px; padding: 8px 3px; }
   }
@@ -233,7 +247,7 @@
   }
 
   /* ===================== 터치 기기 공통 ===================== */
-  button, .chip, .pick-dot, .pick-sq { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+  button, .chip, .pick-dot, .pick-sq, .basemap button { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
   .dock > button:active, .legend .chip:active, .rp-swap:active, .rp-actions button:active { transform: scale(.97); }
   html, body { overscroll-behavior: none; }   /* 지도 끌 때 화면 전체가 튕기지 않게 */
 </style>
@@ -346,36 +360,71 @@ fitCampus();
 window.addEventListener("load", () => setTimeout(() => fitCampus(), 100));
 console.info("[배리어프리맵] 휴대폰·아이패드 통합 2026-11-19 버전");   // 휴대폰에 새 파일이 반영됐는지 확인용
 
-// ===== 배경지도 =====
-// 브이월드 인증키: 등록한 주소(money710.github.io)에서만 동작 → 그 외(로컬 테스트 등)에서는 Esri 위성영상 사용
+// ===== 배경지도 (우상단에서 선택: 위성영상 / 일반지도 / 위성영상+일반지도) =====
+// 브이월드 인증키: 등록한 주소(money710.github.io)에서만 동작 → 그 외(로컬 테스트 등)에서는 Esri·OSM으로 대신 표시
 const VWORLD_KEY = "1E88965C-58D6-4447-BA2A-6141E9DA18ED";
 const VWORLD_HOSTS = ["money710.github.io"];   // 브이월드에 등록한 서비스 주소
 const vwUrl = (layer, ext) => `https://api.vworld.kr/req/wmts/1.0.0/${VWORLD_KEY}/${layer}/{z}/{y}/{x}.${ext}`;
+let useVworld = VWORLD_HOSTS.includes(location.hostname);
 
-function addEsri() {
-  L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
-    maxZoom: 20, maxNativeZoom: 19, attribution: "Imagery &copy; Esri",
-  }).addTo(map);
+const TILE_OPT = { maxZoom: 20, maxNativeZoom: 19 };
+const VW_ATTR = "&copy; 국토교통부 브이월드";
+const ESRI_SAT = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
+const ESRI_LABEL = "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}";
+const OSM = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+
+// 각 배경지도를 이루는 타일 레이어 (위성영상+일반지도 = 위성영상 위에 지명·도로명 라벨)
+function baseLayers(key) {
+  if (useVworld) {
+    if (key === "sat")  return [L.tileLayer(vwUrl("Satellite", "jpeg"), { ...TILE_OPT, attribution: VW_ATTR })];
+    if (key === "base") return [L.tileLayer(vwUrl("Base", "png"), { ...TILE_OPT, attribution: VW_ATTR })];
+    return [L.tileLayer(vwUrl("Satellite", "jpeg"), { ...TILE_OPT, attribution: VW_ATTR }), L.tileLayer(vwUrl("Hybrid", "png"), TILE_OPT)];
+  }
+  if (key === "sat")  return [L.tileLayer(ESRI_SAT, { ...TILE_OPT, attribution: "Imagery &copy; Esri" })];
+  if (key === "base") return [L.tileLayer(OSM, { ...TILE_OPT, attribution: "&copy; OpenStreetMap" })];
+  return [L.tileLayer(ESRI_SAT, { ...TILE_OPT, attribution: "Imagery &copy; Esri" }), L.tileLayer(ESRI_LABEL, TILE_OPT)];
 }
 
-if (VWORLD_HOSTS.includes(location.hostname)) {
-  // 브이월드 항공영상 + 지명·도로명 라벨
-  const vwSat = L.tileLayer(vwUrl("Satellite", "jpeg"), {
-    maxZoom: 20, maxNativeZoom: 19, attribution: "&copy; 국토교통부 브이월드",
-  }).addTo(map);
-  const vwLabel = L.tileLayer(vwUrl("Hybrid", "png"), { maxZoom: 20, maxNativeZoom: 19 }).addTo(map);
-  // 인증 실패 등으로 브이월드 지도가 한 장도 안 나오면 Esri로 자동 전환
-  let vwOk = 0, vwErr = 0;
-  vwSat.on("tileload", () => vwOk++);
-  vwSat.on("tileerror", () => {
-    if (++vwErr >= 6 && vwOk === 0) {
-      map.removeLayer(vwSat); map.removeLayer(vwLabel); addEsri();
-      console.warn("[배리어프리맵] 브이월드 지도를 불러오지 못해 Esri 위성영상으로 전환했습니다.");
-    }
-  });
-} else {
-  addEsri();
+let baseKey = "hybrid";   // 처음 화면: 위성영상 + 일반지도
+let baseNow = [];
+function setBase(key) {
+  baseKey = key;
+  baseNow.forEach((l) => map.removeLayer(l));
+  baseNow = baseLayers(key);
+  baseNow.forEach((l) => l.addTo(map).bringToBack());
+  document.querySelectorAll(".basemap button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.key === key));
+  // 브이월드 인증 실패 등으로 지도 조각이 하나도 안 나오면 Esri·OSM으로 자동 전환
+  if (useVworld) {
+    let ok = 0, err = 0;
+    baseNow[0].on("tileload", () => ok++);
+    baseNow[0].on("tileerror", () => {
+      if (++err >= 6 && ok === 0 && useVworld) {
+        useVworld = false;
+        console.warn("[배리어프리맵] 브이월드 지도를 불러오지 못해 Esri·OSM으로 전환했습니다.");
+        setBase(baseKey);
+      }
+    });
+  }
 }
+
+const BaseControl = L.Control.extend({
+  options: { position: "topright" },
+  onAdd() {
+    const box = L.DomUtil.create("div", "basemap");
+    box.setAttribute("role", "group");
+    box.setAttribute("aria-label", "배경지도 선택");
+    [["sat", "위성영상"], ["base", "일반지도"], ["hybrid", "위성영상<br>+ 일반지도"]].forEach(([k, label]) => {
+      const b = L.DomUtil.create("button", "", box);
+      b.type = "button"; b.dataset.key = k; b.innerHTML = label;
+      b.setAttribute("aria-pressed", "false");
+      b.onclick = () => setBase(k);
+    });
+    L.DomEvent.disableClickPropagation(box);
+    return box;
+  },
+});
+map.addControl(new BaseControl());
+setBase(baseKey);
 
 // 애니메이션을 처음부터 다시 재생
 // 반짝임: CSS 클래스 대신 Web Animations API 사용 (아이패드 사파리에서도 매번 다시 재생되고, 중간에 바로 멈출 수 있음)
