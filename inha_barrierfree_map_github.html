@@ -642,7 +642,7 @@ function buildingPopup(p) {
         <button type="button" class="plan-open" data-src="${esc(f.image)}" data-title="${esc(p.name)} ${label(f)}" aria-label="${esc(p.name)} ${label(f)} 평면도 크게 보기">
           <img class="plan-img" src="${esc(f.image)}" alt="${esc(p.name)} ${label(f)} 평면도">
         </button>
-        <p class="plan-hint">그림을 누르면 크게 볼 수 있어요${f.note ? ` · ${esc(f.note)}` : ""}</p>
+        <p class="plan-hint">그림을 누르면 크게 볼 수 있어요<dt>${f.note ? ` · ${esc(f.note)}` : ""}</p>
       </div>`))
     .join("");
   return `<div class="pop-head">${esc(p.name)}</div><div class="pop-tabs" role="tablist">${tabs}</div><div class="pop-body">${panes}</div>`;
